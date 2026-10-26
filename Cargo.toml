@@ -31,7 +31,30 @@ flora-ingest = { path = "crates/flora-ingest" }
 flora-analytics = { path = "crates/flora-analytics" }
 flora-api = { path = "crates/flora-api" }
 flora-server = { path = "crates/flora-server" }
-flora-provision = { path = "crates/flora-provision" }
+
+# Firmware toolchain, shared by flora-node and flora-aggregator. Kept in one
+# place because the embassy family must move together: two copies of the HAL
+# against one set of PAC peripherals do not link.
+cortex-m = { version = "0.7.6", features = ["inline-asm"] }
+cortex-m-rt = "0.7"
+defmt = "1"
+defmt-rtt = "1"
+embassy-executor = { version = "0.10", default-features = false, features = ["platform-cortex-m", "executor-thread", "defmt"] }
+embassy-rp = { version = "0.10", default-features = false, features = ["defmt", "rp2040", "time-driver", "critical-section-impl"] }
+embassy-time = { version = "0.5.1", features = ["defmt", "defmt-timestamp-uptime"] }
+embassy-usb = { version = "0.6", features = ["defmt"] }
+heapless = "0.9"
+panic-probe = { version = "1", features = ["print-defmt"] }
+portable-atomic = { version = "1", features = ["critical-section"] }
+static_cell = "2.1"
+
+# Aggregator only: Pico W radio and network stack. `cyw43-pio` must match
+# embassy-rp's major.minor or two incompatible HAL copies get compiled.
+embassy-net = { version = "0.9", default-features = false, features = ["tcp", "udp", "dns", "dhcpv4", "medium-ethernet"] }
+embedded-io-async = "0.7"
+embedded-nal-async = "0.9"
+cyw43 = { version = "0.7", default-features = false, features = ["defmt"] }
+cyw43-pio = { version = "0.10", default-features = false }
 
 [profile.release]
 lto = "thin"

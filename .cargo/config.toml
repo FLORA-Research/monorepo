@@ -1,0 +1,9 @@
+# No default `build.target`: the libraries build and test on the host, and
+# the firmware build names thumbv6m-none-eabi explicitly. Setting a default
+# here would silently break `cargo test`, which is the fast local loop.
+
+[target.thumbv6m-none-eabi]
+rustflags = [
+    "-C", "link-arg=-Tlink.x",
+    "-C", "link-arg=-Tdefmt.x",
+]

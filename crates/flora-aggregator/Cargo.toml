@@ -12,7 +12,47 @@ name = "flora-aggregator"
 path = "src/bin/firmware.rs"
 required-features = ["firmware"]
 
-# Hello-world placeholder so the workspace resolves; the firmware feature
-# and the thumbv6m build arrive with the firmware chunk.
+# The library is `no_std` and builds on the host, so its logic can be tested
+# without hardware. The `firmware` feature pulls in the Embassy runtime, the
+# RP2040 HAL, and the Pico W radio; the binary needs it and only builds for
+# thumbv6m.
 [features]
-firmware = []
+firmware = [
+    "dep:cortex-m",
+    "dep:cortex-m-rt",
+    "dep:defmt",
+    "dep:defmt-rtt",
+    "dep:embassy-executor",
+    "dep:embassy-net",
+    "dep:embassy-rp",
+    "dep:embassy-time",
+    "dep:embassy-usb",
+    "dep:cyw43",
+    "dep:cyw43-pio",
+    "dep:embedded-io-async",
+    "dep:embedded-nal-async",
+    "dep:heapless",
+    "dep:panic-probe",
+    "dep:portable-atomic",
+    "dep:static_cell",
+]
+
+[dependencies]
+flora-device = { workspace = true }
+cortex-m = { workspace = true, optional = true }
+cortex-m-rt = { workspace = true, optional = true }
+defmt = { workspace = true, optional = true }
+defmt-rtt = { workspace = true, optional = true }
+embassy-executor = { workspace = true, optional = true }
+embassy-net = { workspace = true, optional = true }
+embassy-rp = { workspace = true, optional = true }
+embassy-time = { workspace = true, optional = true }
+embassy-usb = { workspace = true, optional = true }
+cyw43 = { workspace = true, optional = true }
+cyw43-pio = { workspace = true, optional = true }
+embedded-io-async = { workspace = true, optional = true }
+embedded-nal-async = { workspace = true, optional = true }
+heapless = { workspace = true, optional = true }
+panic-probe = { workspace = true, optional = true }
+portable-atomic = { workspace = true, optional = true }
+static_cell = { workspace = true, optional = true }
