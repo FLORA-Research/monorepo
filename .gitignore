@@ -1,0 +1,32 @@
+# Operational documentation stays local and untracked.
+/internal/
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Secrets and provisioning outputs
+.env
+.env.*
+!.env.example
+provisioned/
+credentials.json
+*.pem
+*.key
+
+# Firmware images produced by builds and releases
+*.uf2
+
+# Flutter / Dart (scoped to the app directory)
+/app/.dart_tool/
+/app/.flutter-plugins
+/app/.flutter-plugins-dependencies
+/app/build/
+/app/coverage/
+/app/.idea/
+
+# Editors and OS noise
+.idea/
+.vscode/
+*.iml
+.DS_Store
