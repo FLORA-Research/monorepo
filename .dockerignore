@@ -1,0 +1,11 @@
+# The Docker build needs manifests, crates, and the toolchain pin. Keep the
+# context small: target/ alone is gigabytes and app/ is never copied.
+target/
+app/
+internal/
+.git/
+.github/
+.idea/
+.vscode/
+*.uf2
+provisioned/

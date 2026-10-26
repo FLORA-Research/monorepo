@@ -1,0 +1,34 @@
+version: 2
+updates:
+  # GitHub Actions: weekly, grouped, PRs against main.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci:"
+
+  # Rust crates: one Cargo.lock at the root covers the workspace.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      cargo:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps:"
+
+  # Flutter: pubspec lives in app/.
+  - package-ecosystem: pub
+    directory: /app
+    schedule:
+      interval: weekly
+    groups:
+      pub:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps:"

@@ -1,0 +1,32 @@
+# Render blueprint for the cloud API.
+#
+# Deploys the GHCR image built by release.yml, so what Render runs is what
+# CI built and pushed, byte for byte. Pin `image.url` to a release tag
+# (e.g. ghcr.io/flora-research/monorepo:release-2026-10-27) for a controlled
+# deploy, or leave it on `:main` to track every merge.
+#
+# Postgres lives on Layerbase, outside Render, so there is no `databases:`
+# block here: a blueprint can only provision Render's own databases.
+# DATABASE_URL is a sync-var carrying the Layerbase connection string
+# (`?sslmode=require` required), set once in the dashboard.
+
+services:
+  - type: web
+    name: flora-api
+    runtime: image
+    image:
+      url: ghcr.io/flora-research/monorepo:main
+    region: singapore
+    plan: free
+    healthCheckPath: /uptime
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PROVISION_API_KEY_HASH
+        sync: false
+      - key: BIND_ADDR
+        value: 0.0.0.0:10000
+      - key: RUST_LOG
+        value: flora_server=info

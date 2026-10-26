@@ -1,0 +1,240 @@
+name: release
+
+# A rollup release per release run: the tag is the date (`release-YYYY-MM-DD`,
+# `-2` suffix on a repeat), the title "Release YYYY-MM-DD". Assets carry
+# the per-component versions from the manifests, so the ledger of component
+# versions (node-vX.Y.Z etc.) lives in the assets themselves and in the
+# Cargo.toml history, not in the tag name.
+#
+# Trigger: a version bump in a manifest (push to main of any Cargo.toml
+# version change or pubspec version change) or a manual dispatch. The
+# assets are built from whatever main is; component releases cut when the
+# version in the manifest is bumped.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/**/Cargo.toml"
+      - "app/pubspec.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  versions:
+    name: collect versions
+    runs-on: ubuntu-latest
+    outputs:
+      node: ${{ steps.v.outputs.node }}
+      aggregator: ${{ steps.v.outputs.aggregator }}
+      server: ${{ steps.v.outputs.server }}
+      provision: ${{ steps.v.outputs.provision }}
+      app: ${{ steps.v.outputs.app }}
+      date: ${{ steps.v.outputs.date }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: v
+        run: |
+          ver() { grep -m1 '^version' "crates/$1/Cargo.toml" | cut -d'"' -f2; }
+          appver=$(grep -m1 '^version:' app/pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          echo "node=$(ver flora-node)" >> "$GITHUB_OUTPUT"
+          echo "aggregator=$(ver flora-aggregator)" >> "$GITHUB_OUTPUT"
+          echo "server=$(ver flora-server)" >> "$GITHUB_OUTPUT"
+          echo "provision=$(ver flora-provision)" >> "$GITHUB_OUTPUT"
+          echo "app=$appver" >> "$GITHUB_OUTPUT"
+          echo "date=$(date +%F)" >> "$GITHUB_OUTPUT"
+
+  firmware:
+    name: firmware uf2 (${{ matrix.crate }})
+    needs: versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crate: flora-node
+            version: ${{ needs.versions.outputs.node }}
+          - crate: flora-aggregator
+            version: ${{ needs.versions.outputs.aggregator }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: firmware
+      - run: cargo build --locked --release -p ${{ matrix.crate }} --features firmware --target thumbv6m-none-eabi
+      - name: make uf2
+        run: |
+          cargo install elf2uf2-rs --locked
+          elf2uf2-rs target/thumbv6m-none-eabi/release/${{ matrix.crate }} \
+            ${{ matrix.crate }}-${{ matrix.version }}.uf2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.crate }}-${{ matrix.version }}.uf2
+          path: ${{ matrix.crate }}-${{ matrix.version }}.uf2
+          if-no-files-found: error
+
+  server:
+    name: server binaries + image
+    needs: versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked --release -p flora-server --target x86_64-unknown-linux-musl
+      - run: cargo build --locked --release -p flora-server --target aarch64-unknown-linux-musl
+      - name: package binaries
+        run: |
+          v=${{ needs.versions.outputs.server }}
+          mkdir -p dist
+          tar -czf dist/flora-server-$v-x86_64-unknown-linux-musl.tar.gz \
+            -C target/x86_64-unknown-linux-musl/release flora-server
+          tar -czf dist/flora-server-$v-aarch64-unknown-linux-musl.tar.gz \
+            -C target/aarch64-unknown-linux-musl/release flora-server
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-dist
+          path: dist/
+          if-no-files-found: error
+
+      # Docker: what Render runs is what this run built. GHCR requires
+      # lowercase image names, and github.repository (FLORA-Research/
+      # monorepo) is mixed-case.
+      - name: lowercase image name
+        id: image
+        run: echo "name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ steps.image.outputs.name }}:main
+            ghcr.io/${{ steps.image.outputs.name }}:server-${{ needs.versions.outputs.server }}
+            ghcr.io/${{ steps.image.outputs.name }}:release-${{ needs.versions.outputs.date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  provision:
+    name: provision binaries
+    needs: versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      # flora-provision links serialport -> libudev, so these are glibc
+      # builds; static udev is not worth the fight. Cross-compile to
+      # aarch64 through cargo-zigbuild (glibc-dynamic, portable across
+      # distros via the manylinux baseline).
+      - run: cargo install cargo-zigbuild --locked
+      - run: rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
+      - run: cargo zigbuild --locked --release -p flora-provision --target x86_64-unknown-linux-gnu
+      - run: cargo zigbuild --locked --release -p flora-provision --target aarch64-unknown-linux-gnu
+      - name: package binaries
+        run: |
+          v=${{ needs.versions.outputs.provision }}
+          mkdir -p dist
+          tar -czf dist/flora-provision-$v-x86_64-linux-gnu.tar.gz \
+            -C target/x86_64-unknown-linux-gnu/release flora-provision
+          tar -czf dist/flora-provision-$v-aarch64-linux-gnu.tar.gz \
+            -C target/aarch64-unknown-linux-gnu/release flora-provision
+      - uses: actions/upload-artifact@v4
+        with:
+          name: provision-dist
+          path: dist/
+          if-no-files-found: error
+
+  app:
+    name: app apk
+    needs: versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.5
+          cache: true
+      - run: flutter pub get
+      # The API URL is compiled in; a release build without this define
+      # produces an APK that cannot reach any server.
+      - run: flutter build apk --release --dart-define=FLORA_API=${{ secrets.FLORA_API_URL }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+  publish:
+    name: publish release
+    needs: [versions, firmware, server, provision, app]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v5
+        with:
+          path: assets
+          merge-multiple: true
+      - name: rename apk with version
+        run: |
+          v=${{ needs.versions.outputs.app }}
+          mv assets/app-release.apk assets/flora-app-$v.apk
+      - name: checksums
+        run: |
+          cd assets
+          sha256sum * > ../SHA256SUMS.txt
+      - name: deduplicate release tag
+        id: tag
+        run: |
+          base="release-${{ needs.versions.outputs.date }}"
+          tag="$base"
+          n=1
+          while git ls-remote --exit-code origin "refs/tags/$tag" >/dev/null; do
+            n=$((n + 1))
+            tag="$base-$n"
+          done
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Release ${{ needs.versions.outputs.date }}
+          generate_release_notes: true
+          files: |
+            assets/*
+            SHA256SUMS.txt
