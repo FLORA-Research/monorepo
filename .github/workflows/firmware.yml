@@ -1,0 +1,74 @@
+name: firmware
+
+# The firmware binaries only build for thumbv6m-none-eabi behind the
+# `firmware` feature, so `cargo test` never compiles them. Only this job
+# can catch an embassy API change, a missing feature, a linker-script
+# problem, or a RAM overflow that host tests cannot see.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/flora-node/**"
+      - "crates/flora-aggregator/**"
+      - "crates/flora-device/**"
+      - "crates/flora-drivers/**"
+      - "crates/flora-protocol/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - ".github/workflows/firmware.yml"
+  pull_request:
+    paths:
+      - "crates/flora-node/**"
+      - "crates/flora-aggregator/**"
+      - "crates/flora-device/**"
+      - "crates/flora-drivers/**"
+      - "crates/flora-protocol/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - ".github/workflows/firmware.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.crate }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [flora-node, flora-aggregator]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: firmware
+      # The host job cannot reach the binary; lint it here, for the target
+      # it ships to.
+      - run: cargo clippy --locked -p ${{ matrix.crate }} --features firmware --target thumbv6m-none-eabi -- -D warnings
+      # Release is what ships, and it is where an optimisation can expose
+      # a bug a debug build hides.
+      - run: cargo build --locked --release -p ${{ matrix.crate }} --features firmware --target thumbv6m-none-eabi
+      # The linker output is the artifact a person flashes; surfacing its
+      # size makes an accidental dependency balloon visible in the PR.
+      - name: report binary size
+        run: |
+          ls -l target/thumbv6m-none-eabi/release/${{ matrix.crate }}
+          arm-none-eabi-size target/thumbv6m-none-eabi/release/${{ matrix.crate }} || true
