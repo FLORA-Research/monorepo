@@ -44,6 +44,10 @@ embassy-rp = { version = "0.10", default-features = false, features = ["defmt", 
 embassy-time = { version = "0.5.1", features = ["defmt", "defmt-timestamp-uptime"] }
 embassy-usb = { version = "0.6", features = ["defmt"] }
 heapless = "0.9"
+# Cryptography: Ed25519 signature checks and SHA-256 device-id derivation.
+# sha2 stays no_std (thumbv6m-linkable); enable the asm backend only where
+# the target provides one.
+sha2 = { version = "0.10", default-features = false }
 panic-probe = { version = "1", features = ["print-defmt"] }
 portable-atomic = { version = "1", features = ["critical-section"] }
 static_cell = "2.1"
