@@ -1,0 +1,12 @@
+[package]
+name = "flora-provision"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+flora-protocol = { workspace = true }
+
+[[bin]]
+name = "flora-provision"
+path = "src/main.rs"

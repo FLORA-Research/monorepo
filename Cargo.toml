@@ -1,0 +1,46 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/flora-aggregator",
+    "crates/flora-analytics",
+    "crates/flora-api",
+    "crates/flora-auth",
+    "crates/flora-db",
+    "crates/flora-device",
+    "crates/flora-drivers",
+    "crates/flora-ingest",
+    "crates/flora-node",
+    "crates/flora-protocol",
+    "crates/flora-provision",
+    "crates/flora-server",
+]
+
+[workspace.package]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+# Internal crates. Device-facing crates are `no_std` and must build for
+# thumbv6m, so nothing in this group may pull a runtime dependency on `std`.
+flora-protocol = { path = "crates/flora-protocol" }
+flora-drivers = { path = "crates/flora-drivers" }
+flora-device = { path = "crates/flora-device" }
+flora-db = { path = "crates/flora-db" }
+flora-auth = { path = "crates/flora-auth" }
+flora-ingest = { path = "crates/flora-ingest" }
+flora-analytics = { path = "crates/flora-analytics" }
+flora-api = { path = "crates/flora-api" }
+flora-server = { path = "crates/flora-server" }
+flora-provision = { path = "crates/flora-provision" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# Firmware ships from the same profile but needs symbols for probe-rs and
+# size reporting; host/server binaries stay stripped.
+[profile.firmware]
+inherits = "release"
+debug = true
+strip = false
