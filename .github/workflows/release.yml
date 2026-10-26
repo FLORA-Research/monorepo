@@ -214,10 +214,29 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+      # Named downloads only: the docker build's `cache-to: type=gha` also
+      # uploads a `.dockerbuild` cache artifact, which download-all tries
+      # to fetch and cannot.
       - uses: actions/download-artifact@v5
         with:
           path: assets
           merge-multiple: true
+          pattern: "*uf2"
+      - uses: actions/download-artifact@v5
+        with:
+          path: assets
+          merge-multiple: true
+          pattern: "server-dist"
+      - uses: actions/download-artifact@v5
+        with:
+          path: assets
+          merge-multiple: true
+          pattern: "provision-dist"
+      - uses: actions/download-artifact@v5
+        with:
+          path: assets
+          merge-multiple: true
+          pattern: "app-apk"
       - name: rename apk with version
         run: |
           v=${{ needs.versions.outputs.app }}
