@@ -882,6 +882,9 @@ dependencies = [
 [[package]]
 name = "flora-drivers"
 version = "0.1.0"
+dependencies = [
+ "flora-protocol",
+]
 
 [[package]]
 name = "flora-ingest"
