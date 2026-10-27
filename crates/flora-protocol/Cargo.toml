@@ -5,4 +5,23 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+serde = { workspace = true, optional = true }
 sha2 = { workspace = true }
+
+[features]
+# JSON wire models (batch serde structs, provision handshake, QR parse)
+# for host consumers: server ingest and the provision CLI. Default-on so
+# `cargo test --workspace` exercises them; the firmware crates opt out
+# with default-features = false and use the hand-rolled encoders instead,
+# since serde's `alloc` requirement cannot link for thumbv6m.
+default = ["wire"]
+wire = ["dep:serde", "serde/alloc"]
+
+[dev-dependencies]
+# Cross-backend compat check: the firmware parses these messages with
+# serde-json-core, the server with serde_json. A payload one side emits
+# must parse identically on the other. Tests build the crate with its
+# wire feature regardless of which consumer links it.
+serde-json-core = { workspace = true }
+serde_json = { workspace = true }
+
