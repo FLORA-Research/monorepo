@@ -1221,6 +1221,14 @@ dependencies = [
 [[package]]
 name = "flora-analytics"
 version = "0.1.0"
+dependencies = [
+ "chrono",
+ "flora-db",
+ "serde",
+ "sqlx",
+ "thiserror",
+ "uuid",
+]
 
 [[package]]
 name = "flora-api"
