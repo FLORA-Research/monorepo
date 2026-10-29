@@ -1285,7 +1285,13 @@ dependencies = [
 name = "flora-ingest"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "flora-db",
  "flora-protocol",
+ "hex",
+ "serde_json",
+ "sqlx",
+ "thiserror",
 ]
 
 [[package]]

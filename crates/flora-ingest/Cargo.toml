@@ -5,4 +5,10 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-flora-protocol = { workspace = true }
+chrono.workspace = true
+flora-db = { workspace = true }
+hex.workspace = true
+flora-protocol = { workspace = true, features = ["wire"] }
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
