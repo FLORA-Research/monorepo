@@ -50,6 +50,14 @@ pub enum ProtocolError {
     PublicKeyLength,
     /// The output buffer is too small for the encoded result.
     OutputTooSmall,
+    /// Public key is not a canonical Ed25519 point. Only produced by the
+    /// `verify` feature; the firmware's `ed25519-compact` reports the
+    /// same condition as a generic verify failure.
+    PublicKeyEncoding,
+    /// Signature is not [`SIGNATURE_LEN`] bytes.
+    SignatureLength,
+    /// Signature verification failed.
+    Signature,
 }
 
 impl core::fmt::Display for ProtocolError {
@@ -59,9 +67,18 @@ impl core::fmt::Display for ProtocolError {
                 write!(f, "public key must be {PUBLIC_KEY_LEN} bytes")
             }
             ProtocolError::OutputTooSmall => write!(f, "output buffer too small"),
+            ProtocolError::PublicKeyEncoding => {
+                write!(f, "public key is not a valid Ed25519 point")
+            }
+            ProtocolError::SignatureLength => {
+                write!(f, "signature must be {SIGNATURE_LEN} bytes")
+            }
+            ProtocolError::Signature => write!(f, "signature verification failed"),
         }
     }
 }
+
+impl core::error::Error for ProtocolError {}
 
 /// Encode the message an app signs for a manual command.
 ///

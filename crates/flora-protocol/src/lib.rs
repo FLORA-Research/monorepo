@@ -32,6 +32,11 @@ pub mod payload;
 pub mod provision;
 pub mod qr;
 pub mod signed;
+#[cfg(feature = "verify")]
+pub mod verify;
+
+#[cfg(feature = "verify")]
+pub use verify::verify_command_signature;
 
 pub use batch::{Batch, MAX_BATCH_JSON, MAX_BATCH_NODES, NodeSample};
 #[cfg(feature = "wire")]

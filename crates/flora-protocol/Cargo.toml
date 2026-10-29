@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+ed25519-dalek = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 sha2 = { workspace = true }
 
@@ -16,6 +17,10 @@ sha2 = { workspace = true }
 # since serde's `alloc` requirement cannot link for thumbv6m.
 default = ["wire"]
 wire = ["dep:serde", "serde/alloc"]
+# Host-side Ed25519 verification (dalek). The firmware verifies with
+# `ed25519-compact` inside flora-device; the server and its tests verify
+# here so app signatures are checked against the same wire contract.
+verify = ["dep:ed25519-dalek"]
 
 [dev-dependencies]
 # Cross-backend compat check: the firmware parses these messages with
