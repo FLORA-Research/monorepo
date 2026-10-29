@@ -6,4 +6,11 @@ license.workspace = true
 
 [dependencies]
 flora-protocol = { workspace = true }
+ed25519-compact = { workspace = true }
 flora-drivers = { workspace = true }
+
+[dev-dependencies]
+ed25519-compact = { workspace = true, features = ["std"] }
+# Cross-implementation parity: the cloud signs with dalek, the device
+# verifies with compact. This test proves the bytes agree.
+ed25519-dalek = { version = "2", default-features = false, features = ["fast"] }

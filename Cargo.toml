@@ -47,6 +47,9 @@ embassy-rp = { version = "0.10", default-features = false, features = ["defmt", 
 embassy-time = { version = "0.5.1", features = ["defmt", "defmt-timestamp-uptime"] }
 embassy-usb = { version = "0.6", features = ["defmt"] }
 heapless = "0.9"
+# Ed25519 command verification. no_std so the aggregator verifies app
+# signatures on the same crate host tests use.
+ed25519-compact = { version = "2", default-features = false }
 # Cryptography: Ed25519 signature checks and SHA-256 device-id derivation.
 # sha2 stays no_std (thumbv6m-linkable); enable the asm backend only where
 # the target provides one.

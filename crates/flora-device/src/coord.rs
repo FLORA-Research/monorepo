@@ -9,14 +9,17 @@
 //! aggregator cannot disagree about whether a valve is open.
 
 use crate::coordinator::{Poller, calibrate_request, set_threshold_request, set_valve_request};
+use crate::crypto::{NonceCache, VerifyError, verify_command};
 use flora_drivers::{FW_PACKED, IrrigationController, NodeConfig};
 use flora_protocol::{
     Batch, KIND_CALIBRATE, KIND_SET_THRESHOLD, KIND_SET_VALVE, MAX_FRAME_LEN, NodeSample,
-    SensorReading,
+    SensorReading, canonical_message,
 };
 
 /// Aggregator-local node table capacity.
 pub const MAX_NODES: usize = 16;
+/// Accepted-command nonce memory.
+pub const NONCE_CAPACITY: usize = 32;
 /// Retained batches when the uplink is down.
 pub const BUFFER_SLOTS: usize = 16;
 
@@ -120,11 +123,10 @@ impl<const N: usize> OfflineBuffer<N> {
     }
 }
 
-/// Owns the coordinator's node table and offline buffer. The nonce cache
-/// and signature verification land with the crypto module and are
-/// composed in by the firmware bin.
+/// Owns the coordinator's node table, nonce cache, and offline buffer.
 pub struct Coordinator {
     poller: Poller<MAX_NODES>,
+    nonces: NonceCache<NONCE_CAPACITY>,
     buffer: OfflineBuffer<BUFFER_SLOTS>,
     gateway_id: [u8; 16],
     /// The aggregator's own plot, identified within its own bus.
@@ -144,6 +146,7 @@ impl Coordinator {
             // it is deliberately absent from the poller: `0x01` is the
             // aggregator identity and is not a valid bus node address.
             poller: Poller::new(),
+            nonces: NonceCache::new(),
             buffer: OfflineBuffer::new(),
             gateway_id,
             local_uuid: gateway_id[..8].try_into().expect("16 bytes contain 8"),
@@ -170,6 +173,45 @@ impl Coordinator {
 
     pub fn buffer(&mut self) -> &mut OfflineBuffer<BUFFER_SLOTS> {
         &mut self.buffer
+    }
+
+    /// Nonce memory used for replay protection during command
+    /// verification.
+    pub fn nonces(&mut self) -> &mut NonceCache<NONCE_CAPACITY> {
+        &mut self.nonces
+    }
+
+    /// Verify a signed manual command and route it.
+    ///
+    /// The signature is checked before any bus traffic is generated, so
+    /// an unauthenticated cloud cannot cause a valve to move.
+    pub fn accept_command(
+        &mut self,
+        account_public_key: &[u8],
+        signature: &[u8],
+        command: RoutedCommand,
+        nonce: u32,
+        timestamp: u32,
+        now: u32,
+    ) -> Result<DispatchOutcome, VerifyError> {
+        let message = canonical_message(
+            command.kind,
+            &self.gateway_id,
+            command.addr,
+            nonce,
+            timestamp,
+            &command.payload,
+        );
+        verify_command(
+            account_public_key,
+            signature,
+            &message,
+            nonce,
+            timestamp,
+            &mut self.nonces,
+            now,
+        )?;
+        Ok(self.route(command))
     }
 
     /// Register a node found during discovery.
@@ -275,7 +317,114 @@ pub fn apply_local_valve(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use flora_protocol::{AGGREGATOR_ADDR, decode};
+    use alloc::vec;
+    use ed25519_compact::{KeyPair, Seed};
+    use flora_protocol::{AGGREGATOR_ADDR, CMD_SET_VALVE, KIND_SET_VALVE, decode};
+
+    fn keypair() -> KeyPair {
+        KeyPair::from_seed(Seed::new([3u8; 32]))
+    }
+
+    fn signed_command(
+        keypair: &KeyPair,
+        gateway_id: &[u8; 16],
+        command: RoutedCommand,
+        nonce: u32,
+        timestamp: u32,
+    ) -> vec::Vec<u8> {
+        let message = flora_protocol::canonical_message(
+            command.kind,
+            gateway_id,
+            command.addr,
+            nonce,
+            timestamp,
+            &command.payload,
+        );
+        keypair.sk.sign(message, None).to_vec()
+    }
+
+    #[test]
+    fn unverified_command_moves_nothing() {
+        let mut coordinator = Coordinator::new(*b"agg-0001agg-0001", AGGREGATOR_ADDR);
+        let keypair = keypair();
+        let command = RoutedCommand {
+            kind: KIND_SET_VALVE,
+            addr: 4,
+            payload: [1, 0, 30, 0],
+        };
+        // Signature produced by a different key than the one presented.
+        let attacker = KeyPair::from_seed(Seed::new([9u8; 32]));
+        let signature = signed_command(&attacker, &coordinator.gateway_id(), command, 1, 1_000);
+        assert_eq!(
+            coordinator.accept_command(keypair.pk.as_ref(), &signature, command, 1, 1_000, 1_010),
+            Err(VerifyError::BadSignature)
+        );
+    }
+
+    #[test]
+    fn verified_command_routes_to_the_targeted_node() {
+        let mut coordinator = Coordinator::new(*b"agg-0001agg-0001", AGGREGATOR_ADDR);
+        coordinator.register_node(4, 77);
+        let keypair = keypair();
+        let command = RoutedCommand {
+            kind: KIND_SET_VALVE,
+            addr: 4,
+            payload: [1, 0, 30, 0],
+        };
+        let signature = signed_command(&keypair, &coordinator.gateway_id(), command, 1, 1_000);
+        let outcome = coordinator
+            .accept_command(keypair.pk.as_ref(), &signature, command, 1, 1_000, 1_010)
+            .unwrap();
+        match outcome {
+            DispatchOutcome::Routed(bytes, len) => {
+                let frame = decode(&bytes[..len]).unwrap();
+                assert_eq!(frame.addr, 4);
+                assert_eq!(frame.cmd, CMD_SET_VALVE);
+                assert_eq!(frame.payload, [1, 0, 30]);
+                assert_eq!(frame.sequence, 77);
+            }
+            other => panic!("expected a routed command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn command_for_the_aggregator_is_local() {
+        let mut coordinator = Coordinator::new(*b"agg-0001agg-0001", AGGREGATOR_ADDR);
+        let keypair = keypair();
+        let command = RoutedCommand {
+            kind: KIND_SET_THRESHOLD,
+            addr: AGGREGATOR_ADDR,
+            payload: [0, 200, 2, 188],
+        };
+        let signature = signed_command(&keypair, &coordinator.gateway_id(), command, 2, 1_000);
+        assert_eq!(
+            coordinator
+                .accept_command(keypair.pk.as_ref(), &signature, command, 2, 1_000, 1_010)
+                .unwrap(),
+            DispatchOutcome::Local
+        );
+    }
+
+    #[test]
+    fn replayed_command_is_refused() {
+        let mut coordinator = Coordinator::new(*b"agg-0001agg-0001", AGGREGATOR_ADDR);
+        let keypair = keypair();
+        let command = RoutedCommand {
+            kind: KIND_SET_VALVE,
+            addr: 4,
+            payload: [1, 0, 30, 0],
+        };
+        let signature = signed_command(&keypair, &coordinator.gateway_id(), command, 5, 1_000);
+        assert!(
+            coordinator
+                .accept_command(keypair.pk.as_ref(), &signature, command, 5, 1_000, 1_010)
+                .is_ok()
+        );
+        assert_eq!(
+            coordinator.accept_command(keypair.pk.as_ref(), &signature, command, 5, 1_000, 1_011),
+            Err(VerifyError::Replayed)
+        );
+    }
 
     #[test]
     fn a_routed_frame_decodes_back_to_its_command() {
