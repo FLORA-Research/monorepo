@@ -10,6 +10,8 @@
 //! The `firmware` feature pulls the embassy/HAL bindings; without it the
 //! crate is pure logic and runs under the host toolchain.
 
+pub mod coord;
+pub mod coordinator;
 pub mod node;
 
 pub use node::{NodeProcessor, Response, ack_for, nack_for};

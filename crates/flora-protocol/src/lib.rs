@@ -33,8 +33,9 @@ pub mod provision;
 pub mod qr;
 pub mod signed;
 
+pub use batch::{Batch, MAX_BATCH_JSON, MAX_BATCH_NODES, NodeSample};
 #[cfg(feature = "wire")]
-pub use batch::{Batch, MAX_BATCH_JSON, MAX_BATCH_NODES, NodeSample, WireBatch, WireNode};
+pub use batch::{WireBatch, WireNode};
 pub use command::{
     CANONICAL_MESSAGE_LEN, CANONICAL_VERSION, GATEWAY_ID_LEN, KIND_CALIBRATE, KIND_SET_THRESHOLD,
     KIND_SET_VALVE, NONCE_LEN, PUBLIC_KEY_LEN, ProtocolError, SIGNATURE_LEN, TOKEN_LEN,
