@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - "crates/**"
+      - "migrations/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -16,6 +17,7 @@ on:
   pull_request:
     paths:
       - "crates/**"
+      - "migrations/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -30,12 +32,34 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Matches the service container below. `sslmode=disable` because the
+  # connection is over the job's own loopback. The database layer skips
+  # its live tests when this is unset, which is convenient locally and a
+  # trap in CI: the service below exists so they actually run, and the
+  # final step fails the job if they were skipped anyway.
+  TEST_DATABASE_URL: postgres://flora:flora@localhost:5432/flora_test?sslmode=disable
 
 jobs:
   check:
     name: fmt, clippy, test
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: flora
+          POSTGRES_PASSWORD: flora
+          POSTGRES_DB: flora_test
+        ports:
+          - 5432:5432
+        # Without this the tests race the database's first start and fail
+        # on a refused connection.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -45,3 +69,12 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+      - name: fail if integration tests were skipped
+        run: |
+          # A skip prints this and passes. Catching it here means a
+          # missing database breaks the build instead of quietly
+          # removing coverage.
+          if cargo test --locked --workspace -- --nocapture 2>&1 | grep -q "TEST_DATABASE_URL unset; skipping"; then
+            echo "::error::integration tests were skipped; TEST_DATABASE_URL was not visible to them"
+            exit 1
+          fi
