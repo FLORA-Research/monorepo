@@ -4,9 +4,23 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 
-[dependencies]
-flora-protocol = { workspace = true, features = ["wire"] }
+[lib]
+path = "src/lib.rs"
 
 [[bin]]
 name = "flora-provision"
 path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap = { version = "4", features = ["derive"] }
+flora-protocol = { workspace = true, features = ["wire"] }
+getrandom.workspace = true
+qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
+serde.workspace = true
+serde_json.workspace = true
+serialport = { version = "4", default-features = false }
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
