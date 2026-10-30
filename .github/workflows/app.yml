@@ -31,7 +31,7 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -44,7 +44,7 @@ jobs:
       # `pub` alone is the small half: the Android build spends most of
       # its time on Gradle and the AGP/Maven dependencies, which flutter
       # does not cache. ~/.gradle is the bulk of a cold APK build.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches
