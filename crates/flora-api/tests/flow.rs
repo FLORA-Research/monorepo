@@ -21,6 +21,11 @@ fn database_url() -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+/// Derive the gateway id from a public key, as the v2 protocol defines it.
+fn derive_device_id(pubkey: &[u8]) -> String {
+    hex::encode(flora_protocol::device_id_bytes(pubkey).unwrap())
+}
+
 /// Serialises tests within this binary, because they share one database.
 static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
@@ -97,8 +102,7 @@ async fn full_provision_claim_and_authenticate_flow() {
 
     // ---- 1. Provisioner registers an aggregator ----
     let aggregator_key = SigningKey::from_bytes(&[7u8; 32]);
-    let device_id =
-        flora_protocol::derive_device_id(aggregator_key.verifying_key().as_bytes()).unwrap();
+    let device_id = derive_device_id(aggregator_key.verifying_key().as_bytes());
     let device_token = flora_auth::generate_token().unwrap();
     let claim_token = flora_auth::generate_token().unwrap();
 
@@ -227,8 +231,7 @@ async fn full_provision_claim_and_authenticate_flow() {
 
     // ---- 5. A signature from the wrong key cannot claim ----
     let stranger = SigningKey::from_bytes(&[9u8; 32]);
-    let device_id_b =
-        flora_protocol::derive_device_id(stranger.verifying_key().as_bytes()).unwrap();
+    let device_id_b = derive_device_id(stranger.verifying_key().as_bytes());
     let token_b = flora_auth::generate_token().unwrap();
     let hash_b = flora_auth::hash_token(&token_b);
     let (status, _) = call(
@@ -362,8 +365,7 @@ async fn revoked_device_loses_access() {
 
     // Provision and claim, reusing the flow above in miniature.
     let aggregator = SigningKey::from_bytes(&[21u8; 32]);
-    let device_id =
-        flora_protocol::derive_device_id(aggregator.verifying_key().as_bytes()).unwrap();
+    let device_id = derive_device_id(aggregator.verifying_key().as_bytes());
     let claim_token = flora_auth::generate_token().unwrap();
     call(
         &state,
@@ -501,8 +503,7 @@ async fn read_surface_and_reports_return_ingested_data() {
 
     // Provision and claim a gateway.
     let aggregator = SigningKey::from_bytes(&[31u8; 32]);
-    let device_id =
-        flora_protocol::derive_device_id(aggregator.verifying_key().as_bytes()).unwrap();
+    let device_id = derive_device_id(aggregator.verifying_key().as_bytes());
     let device_token = flora_auth::generate_token().unwrap();
     let claim_token = flora_auth::generate_token().unwrap();
     // Assert the registration, so a failure here does not surface later as a
@@ -687,7 +688,7 @@ async fn read_surface_and_reports_return_ingested_data() {
 
     // ---- Ownership: another account sees nothing ----
     let stranger = SigningKey::from_bytes(&[33u8; 32]);
-    let other_id = flora_protocol::derive_device_id(stranger.verifying_key().as_bytes()).unwrap();
+    let other_id = derive_device_id(stranger.verifying_key().as_bytes());
     let other_claim = flora_auth::generate_token().unwrap();
     call(
         &state,

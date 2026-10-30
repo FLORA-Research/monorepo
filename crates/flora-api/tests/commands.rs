@@ -32,6 +32,11 @@ fn database_url() -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+/// Derive the gateway id from a public key, as the v2 protocol defines it.
+fn derive_device_id(pubkey: &[u8]) -> String {
+    hex::encode(flora_protocol::device_id_bytes(pubkey).unwrap())
+}
+
 /// Serialises tests within this binary, because they share one database and
 /// each one clears the tables.
 ///
@@ -104,8 +109,7 @@ struct Fixture {
 
 async fn pair_a_gateway(state: &AppState) -> Fixture {
     let aggregator = SigningKey::from_bytes(&[7u8; 32]);
-    let device_id =
-        flora_protocol::derive_device_id(aggregator.verifying_key().as_bytes()).unwrap();
+    let device_id = derive_device_id(aggregator.verifying_key().as_bytes());
     assert_eq!(device_id, GATEWAY, "test expects this gateway id");
 
     let device_token = flora_auth::generate_token().unwrap();
@@ -473,8 +477,7 @@ async fn an_account_cannot_command_another_accounts_gateway() {
 
     // A second account, with its own gateway and phone.
     let other_aggregator = SigningKey::from_bytes(&[21u8; 32]);
-    let other_id =
-        flora_protocol::derive_device_id(other_aggregator.verifying_key().as_bytes()).unwrap();
+    let other_id = derive_device_id(other_aggregator.verifying_key().as_bytes());
     let claim_token = flora_auth::generate_token().unwrap();
     call(
         &state,

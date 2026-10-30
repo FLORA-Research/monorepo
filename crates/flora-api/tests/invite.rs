@@ -25,6 +25,11 @@ fn database_url() -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+/// Derive the gateway id from a public key, as the v2 protocol defines it.
+fn derive_device_id(pubkey: &[u8]) -> String {
+    hex::encode(flora_protocol::device_id_bytes(pubkey).unwrap())
+}
+
 async fn state() -> AppState {
     let url = database_url().expect("checked by caller");
     let pool = flora_db::connect_and_migrate(&url).await.expect("migrate");
@@ -84,8 +89,7 @@ async fn call(
 /// Create an account by claiming a gateway, returning the first phone's session.
 async fn make_account(state: &AppState, seed: u8) -> (String, SigningKey, Uuid) {
     let aggregator = SigningKey::from_bytes(&[seed; 32]);
-    let device_id =
-        flora_protocol::derive_device_id(aggregator.verifying_key().as_bytes()).unwrap();
+    let device_id = derive_device_id(aggregator.verifying_key().as_bytes());
     let claim_token = flora_auth::generate_token().unwrap();
 
     let (status, _) = call(

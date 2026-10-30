@@ -22,6 +22,11 @@ fn database_url() -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+/// Derive the gateway id from a public key, as the v2 protocol defines it.
+fn derive_device_id(pubkey: &[u8]) -> String {
+    hex::encode(flora_protocol::device_id_bytes(pubkey).unwrap())
+}
+
 static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 async fn state() -> AppState {
@@ -94,8 +99,7 @@ struct Fixture {
 /// make two tests interfere.
 async fn claimed_gateway(state: &AppState, seed: u8) -> Fixture {
     let aggregator = SigningKey::from_bytes(&[seed; 32]);
-    let device_id =
-        flora_protocol::derive_device_id(aggregator.verifying_key().as_bytes()).unwrap();
+    let device_id = derive_device_id(aggregator.verifying_key().as_bytes());
     let device_token = flora_auth::generate_token().unwrap();
     let claim_token = flora_auth::generate_token().unwrap();
 
