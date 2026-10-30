@@ -11,7 +11,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 
 use crate::artifacts;
 use crate::cloud;
@@ -34,6 +34,8 @@ pub struct ProvisionedAggregator {
     pub qr_path: Option<PathBuf>,
     /// How the cloud answered, or why it was not contacted.
     pub cloud_status: Option<String>,
+    /// The zip packaging credentials, QR, and firmware backup.
+    pub bundle_path: Option<PathBuf>,
 }
 
 /// Assign an RS-485 address to a node.
@@ -62,7 +64,7 @@ pub fn provision_aggregator<R: Read + Write>(
     output_root: &Path,
     timeout: Duration,
 ) -> Result<ProvisionedAggregator> {
-    provision_aggregator_with_cloud(serial, label, output_root, timeout, None)
+    provision_aggregator_with_cloud(serial, label, output_root, timeout, None, None)
 }
 
 /// Where the cloud lives and how to authenticate to it.
@@ -78,12 +80,18 @@ pub struct CloudTarget {
 /// Registration is optional because the two halves are useful apart: bringing up
 /// a board on a bench needs no server, and a device already flashed should not
 /// be re-flashed just because the cloud moved.
+///
+/// `firmware_backup` is the UF2 this run flashed onto the device, when it
+/// did: it is copied into the provisioning bundle so the site can be
+/// restored from the bundle alone. `None` leaves the bundle without a
+/// firmware member.
 pub fn provision_aggregator_with_cloud<R: Read + Write>(
     serial: &mut R,
     label: &str,
     output_root: &Path,
     timeout: Duration,
     cloud_target: Option<&CloudTarget>,
+    firmware_backup: Option<&Path>,
 ) -> Result<ProvisionedAggregator> {
     let hello: AggregatorHello = handshake::read_aggregator_hello(serial, timeout)?;
     let (mut artifact, device_dir) = artifacts::prepare_pending(output_root, &hello, label)?;
@@ -134,6 +142,19 @@ pub fn provision_aggregator_with_cloud<R: Read + Write>(
 
     let credentials_path = artifacts::mark_provisioned(&device_dir, &mut artifact)?;
 
+    // Package the run: credentials, QR, and (when this run flashed) the
+    // firmware backup, into one zip the operator can archive or use to
+    // restore the site.
+    let bundle = crate::bundle::write_bundle(
+        &device_dir,
+        &artifact.device_id,
+        &credentials_path,
+        &device_dir.join(qr_name),
+        firmware_backup,
+    )?;
+    crate::bundle::verify_bundle(&bundle, firmware_backup.is_some())
+        .with_context(|| format!("self-check the provisioning bundle {}", bundle.display()))?;
+
     Ok(ProvisionedAggregator {
         device_id: artifact.device_id,
         fw: artifact.fw,
@@ -141,6 +162,7 @@ pub fn provision_aggregator_with_cloud<R: Read + Write>(
         credentials_path,
         qr_path: Some(device_dir.join(qr_name)),
         cloud_status: artifact.cloud_status,
+        bundle_path: Some(bundle),
     })
 }
 
@@ -309,6 +331,11 @@ mod tests {
             Some("skipped: no cloud target given")
         );
         assert!(completed.qr_path.is_some_and(|path| path.is_file()));
+        // The bundle carries the credentials and QR; this run flashed no
+        // firmware, so it must not claim a firmware backup.
+        let bundle = completed.bundle_path.clone().unwrap();
+        crate::bundle::verify_bundle(&bundle, false).unwrap();
+        assert!(crate::bundle::verify_bundle(&bundle, true).is_err());
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

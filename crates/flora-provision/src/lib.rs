@@ -2,6 +2,7 @@
 //! with the cloud, write credentials and the pairing QR.
 
 pub mod artifacts;
+pub mod bundle;
 pub mod cloud;
 pub mod handshake;
 pub mod identity;

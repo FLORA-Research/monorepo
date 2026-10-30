@@ -118,6 +118,7 @@ fn run_aggregator(args: AggregatorArgs) -> Result<()> {
         &output_root,
         timeout,
         cloud_target.as_ref(),
+        args.firmware.as_deref(),
     )?;
     println!(
         "Aggregator {} provisioned (firmware {}, UUID {}). Credentials: {}",
@@ -128,6 +129,9 @@ fn run_aggregator(args: AggregatorArgs) -> Result<()> {
     );
     if let Some(qr) = &result.qr_path {
         println!("Pairing code: {}", qr.display());
+    }
+    if let Some(bundle) = &result.bundle_path {
+        println!("Bundle: {}", bundle.display());
     }
     if let Some(status) = &result.cloud_status {
         println!("Cloud: {status}");
