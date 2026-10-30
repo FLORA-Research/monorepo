@@ -5,8 +5,16 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-flora-api = { workspace = true }
+anyhow.workspace = true
+axum.workspace = true
+chrono.workspace = true
+dotenvy.workspace = true
+flora-api.workspace = true
+flora-db.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
-[[bin]]
-name = "flora-server"
-path = "src/main.rs"
+[dev-dependencies]
+parking_lot.workspace = true

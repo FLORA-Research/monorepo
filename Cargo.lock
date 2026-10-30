@@ -1452,7 +1452,17 @@ dependencies = [
 name = "flora-server"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "dotenvy",
  "flora-api",
+ "flora-db",
+ "parking_lot",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
