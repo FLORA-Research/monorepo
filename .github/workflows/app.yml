@@ -41,6 +41,16 @@ jobs:
           flutter-version: 3.47.5
           cache: true
       - run: flutter pub get
+      # `pub` alone is the small half: the Android build spends most of
+      # its time on Gradle and the AGP/Maven dependencies, which flutter
+      # does not cache. ~/.gradle is the bulk of a cold APK build.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('app/android/**/*.gradle*', 'app/android/**/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
       # Analysis is a gate, not advice: a warning here is a warning in an
       # editor nobody reads.
       - run: flutter analyze lib test

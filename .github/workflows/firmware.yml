@@ -60,6 +60,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: firmware
+          # Firmware jobs build for thumbv6m only; do not pay for host
+          # artifacts this job never produces.
+          cache-all-crates: false
       # The host job cannot reach the binary; lint it here, for the target
       # it ships to.
       - run: cargo clippy --locked -p ${{ matrix.crate }} --features firmware --target thumbv6m-none-eabi -- -D warnings

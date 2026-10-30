@@ -74,13 +74,19 @@ jobs:
           targets: thumbv6m-none-eabi
       - uses: Swatinem/rust-cache@v2
         with:
-          key: firmware
+          key: firmware-release
+          # Same reasoning as firmware.yml: thumbv6m artifacts only.
+          cache-all-crates: false
       - run: cargo build --locked --release -p ${{ matrix.crate }} --features firmware --target thumbv6m-none-eabi
       # elf2uf2-rs links libudev for BOOTSEL mount detection.
       - run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      # The tool binary survives in rust-cache's ~/.cargo/bin snapshot, so
+      # the install only compiles on the first run or after a lock change.
       - name: make uf2
         run: |
-          cargo install elf2uf2-rs --locked
+          if [ ! -x ~/.cargo/bin/elf2uf2-rs ]; then
+            cargo install elf2uf2-rs --locked
+          fi
           elf2uf2-rs target/thumbv6m-none-eabi/release/${{ matrix.crate }} \
             ${{ matrix.crate }}-${{ matrix.version }}.uf2
       - uses: actions/upload-artifact@v4
@@ -102,7 +108,20 @@ jobs:
       - uses: mlugg/setup-zig@v2
       # Cross musl through zig: the host cc cannot link aarch64-musl, and
       # zig supplies both target linkers with the same static result.
-      - run: cargo install cargo-zigbuild --locked
+      # rust-cache owns ~/.cargo/bin (cache-bin defaults on): a previous
+      # run's cargo-zigbuild comes back here, and the install below only
+      # fires when it is missing.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+          # The musl targets dominate this cache; keyed apart from the
+          # glibc provision build so neither invalidates the other.
+          key: server-musl
+      - run: |
+          if [ ! -x ~/.cargo/bin/cargo-zigbuild ]; then
+            cargo install cargo-zigbuild --locked
+          fi
       - run: rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
       - run: cargo zigbuild --locked --release -p flora-server --target x86_64-unknown-linux-musl
       - run: cargo zigbuild --locked --release -p flora-server --target aarch64-unknown-linux-musl
@@ -140,8 +159,11 @@ jobs:
             ghcr.io/${{ steps.image.outputs.name }}:main
             ghcr.io/${{ steps.image.outputs.name }}:server-${{ needs.versions.outputs.server }}
             ghcr.io/${{ steps.image.outputs.name }}:release-${{ needs.versions.outputs.date }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Scoped to this image so the Rust workspace cache entries do
+          # not compete with it in the GHA cache, and capped so months of
+          # cache-to writes cannot crowd out the useful layers.
+          cache-from: type=gha,scope=server-image
+          cache-to: type=gha,scope=server-image,mode=max
 
   provision:
     name: provision binaries
@@ -160,7 +182,17 @@ jobs:
       # builds; static udev is not worth the fight. Cross-compile to
       # aarch64 through cargo-zigbuild (glibc-dynamic, portable across
       # distros via the manylinux baseline).
-      - run: cargo install cargo-zigbuild --locked
+      # rust-cache owns ~/.cargo/bin; a previous run's cargo-zigbuild
+      # comes back here and the install below only fires when missing.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+          key: provision-gnu
+      - run: |
+          if [ ! -x ~/.cargo/bin/cargo-zigbuild ]; then
+            cargo install cargo-zigbuild --locked
+          fi
       - run: rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
       - run: cargo zigbuild --locked --release -p flora-provision --target x86_64-unknown-linux-gnu
       - run: cargo zigbuild --locked --release -p flora-provision --target aarch64-unknown-linux-gnu
@@ -198,6 +230,14 @@ jobs:
           flutter-version: 3.47.5
           cache: true
       - run: flutter pub get
+      # Same Gradle cache as app.yml: pub is the small half of an APK build.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('app/android/**/*.gradle*', 'app/android/**/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
       # The API URL is compiled in; a release build without this define
       # produces an APK that cannot reach any server.
       - run: flutter build apk --release --dart-define=FLORA_API=${{ secrets.FLORA_API_URL }}

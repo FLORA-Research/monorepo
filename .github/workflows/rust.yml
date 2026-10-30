@@ -65,16 +65,33 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      # The whole workspace is one lockfile, so one shared cache prefix lets
+      # every Rust job (rust, firmware, release) reuse the same dependency
+      # build when the lockfile agrees. `shared-key` keyed on Cargo.lock
+      # makes that reuse explicit rather than incidental.
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+          shared-key: rust-workspace
+          # Clippy and test build different artifacts; keep both from the
+          # same job so a rerun of either is warm.
+          cache-targets: true
+      # Grep this run's output instead of running the suite twice.
+      # `pipefail` keeps a failing cargo behind `tee` fatal.
+      - name: clippy
+        shell: bash
+        run: set -o pipefail; cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee clippy.log
       - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo test --workspace --locked
+      - name: test
+        shell: bash
+        run: set -o pipefail; cargo test --workspace --locked 2>&1 | tee test.log
       - name: fail if integration tests were skipped
         run: |
           # A skip prints this and passes. Catching it here means a
           # missing database breaks the build instead of quietly
           # removing coverage.
-          if cargo test --locked --workspace -- --nocapture 2>&1 | grep -q "TEST_DATABASE_URL unset; skipping"; then
+          if grep -q "TEST_DATABASE_URL unset; skipping" test.log; then
             echo "::error::integration tests were skipped; TEST_DATABASE_URL was not visible to them"
             exit 1
           fi
