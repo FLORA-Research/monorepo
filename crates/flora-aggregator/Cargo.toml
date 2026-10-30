@@ -31,7 +31,6 @@ firmware = [
     "dep:cyw43-pio",
     "dep:embedded-io-async",
     "dep:embedded-nal-async",
-    "dep:heapless",
     "dep:panic-probe",
     "dep:portable-atomic",
     "dep:static_cell",
@@ -39,6 +38,9 @@ firmware = [
 
 [dependencies]
 flora-device = { workspace = true }
+# The wifi dictionary module (host-testable) uses heapless vectors without
+# the firmware feature; the Embassy path reuses the same dependency.
+heapless = { workspace = true }
 cortex-m = { workspace = true, optional = true }
 cortex-m-rt = { workspace = true, optional = true }
 defmt = { workspace = true, optional = true }
@@ -52,7 +54,6 @@ cyw43 = { workspace = true, optional = true }
 cyw43-pio = { workspace = true, optional = true }
 embedded-io-async = { workspace = true, optional = true }
 embedded-nal-async = { workspace = true, optional = true }
-heapless = { workspace = true, optional = true }
 panic-probe = { workspace = true, optional = true }
 portable-atomic = { workspace = true, optional = true }
 static_cell = { workspace = true, optional = true }

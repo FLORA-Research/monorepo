@@ -88,9 +88,15 @@ sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio",
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
 tower-http = { version = "0.7", default-features = false, features = ["trace", "limit"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"] }
 uuid = { version = "1", features = ["v4", "serde"] }
+
+# Integration-test surface for flora-api: the tests drive the real router
+# through tower's ServiceExt::oneshot and sign with dalek, matching the app.
+tower = { version = "0.5", default-features = false, features = ["util"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [profile.release]
 lto = "thin"

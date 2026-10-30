@@ -5,8 +5,26 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-flora-protocol = { workspace = true }
-flora-db = { workspace = true }
-flora-auth = { workspace = true }
-flora-ingest = { workspace = true }
-flora-analytics = { workspace = true }
+anyhow.workspace = true
+axum.workspace = true
+chrono.workspace = true
+flora-analytics.workspace = true
+flora-auth.workspace = true
+futures-util.workspace = true
+flora-db.workspace = true
+flora-ingest.workspace = true
+flora-protocol = { workspace = true, features = ["wire", "verify"] }
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+reqwest.workspace = true
+ed25519-dalek.workspace = true
+hex.workspace = true
+tokio.workspace = true
+tower.workspace = true

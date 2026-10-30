@@ -1,0 +1,54 @@
+# FLORA aggregator WiFi dictionary.
+#
+# The aggregator firmware bakes this file in at build time (include_str!)
+# and tries each access point in priority order: the first entry has the
+# highest priority. The radio joins the first network that answers and
+# stays associated; if every network fails, the join loop keeps cycling
+# through the list every few seconds.
+#
+# Fields per entry:
+#   ssid      required. Up to 32 characters, no quotes needed.
+#   password  optional. Omit it (or leave it empty) for an open network.
+#             Keep it for any of the WPA variants. WPA3 does not accept a
+#             pre-hashed passphrase, so the passphrase is always stored in
+#             the clear in this file; keep the file out of any public repo.
+#   auth      optional. One of:
+#               open      no encryption (password must be empty/absent)
+#               wpa       WPA (TKIP-era)
+#               wpa2      WPA2 only
+#               wpa3      WPA3 only (SAE)
+#               wpa2wpa3  WPA2 + WPA3 mixed mode (default)
+#             The default is `wpa2wpa3` for entries with a password, and
+#             `open` for entries without one.
+#   priority  optional integer, 0..255. Lower joins sooner. Entries with
+#             equal priority keep their file order. Default: 0.
+#
+# Duplicate SSIDs are an error: the last one wins at parse time and a
+# compile-time test in flora-aggregator fails the build when it happens.
+
+# --- Home/lab networks -------------------------------------------------
+
+[[network]]
+ssid = "FLORA-LAB"
+password = "greenhouse-2026"
+auth = "wpa2wpa3"
+priority = 0
+
+[[network]]
+ssid = "FARM-OFFICE"
+password = "office-passphrase-here"
+auth = "wpa2"
+priority = 10
+
+# --- Fallbacks ---------------------------------------------------------
+
+[[network]]
+ssid = "FLORA-SETUP"
+# Deliberately open: this is the commissioning SSID the provisioner's
+# own phone hotspot provides when nothing else is reachable.
+priority = 200
+
+[[network]]
+ssid = "GuestNet"
+auth = "open"
+priority = 250
