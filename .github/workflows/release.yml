@@ -42,7 +42,7 @@ jobs:
       app: ${{ steps.v.outputs.app }}
       date: ${{ steps.v.outputs.date }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - id: v
         run: |
           ver() { grep -m1 '^version' "crates/$1/Cargo.toml" | cut -d'"' -f2; }
@@ -68,7 +68,7 @@ jobs:
           - crate: flora-aggregator
             version: ${{ needs.versions.outputs.aggregator }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv6m-none-eabi
@@ -89,7 +89,7 @@ jobs:
           fi
           elf2uf2-rs target/thumbv6m-none-eabi/release/${{ matrix.crate }} \
             ${{ matrix.crate }}-${{ matrix.version }}.uf2
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.crate }}-${{ matrix.version }}.uf2
           path: ${{ matrix.crate }}-${{ matrix.version }}.uf2
@@ -101,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
@@ -133,7 +133,7 @@ jobs:
             -C target/x86_64-unknown-linux-musl/release flora-server
           tar -czf dist/flora-server-$v-aarch64-unknown-linux-musl.tar.gz \
             -C target/aarch64-unknown-linux-musl/release flora-server
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: server-dist
           path: dist/
@@ -145,13 +145,13 @@ jobs:
       - name: lowercase image name
         id: image
         run: echo "name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -171,7 +171,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu
@@ -204,7 +204,7 @@ jobs:
             -C target/x86_64-unknown-linux-gnu/release flora-provision
           tar -czf dist/flora-provision-$v-aarch64-linux-gnu.tar.gz \
             -C target/aarch64-unknown-linux-gnu/release flora-provision
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: provision-dist
           path: dist/
@@ -219,8 +219,8 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -231,7 +231,7 @@ jobs:
           cache: true
       - run: flutter pub get
       # Same Gradle cache as app.yml: pub is the small half of an APK build.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches
@@ -241,7 +241,7 @@ jobs:
       # The API URL is compiled in; a release build without this define
       # produces an APK that cannot reach any server.
       - run: flutter build apk --release --dart-define=FLORA_API=${{ secrets.FLORA_API_URL }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: app-apk
           path: app/build/app/outputs/flutter-apk/app-release.apk
@@ -253,26 +253,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # Named downloads only: the docker build's `cache-to: type=gha` also
       # uploads a `.dockerbuild` cache artifact, which download-all tries
       # to fetch and cannot.
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           path: assets
           merge-multiple: true
           pattern: "*uf2"
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           path: assets
           merge-multiple: true
           pattern: "server-dist"
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           path: assets
           merge-multiple: true
           pattern: "provision-dist"
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           path: assets
           merge-multiple: true
@@ -297,7 +297,7 @@ jobs:
           done
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Release ${{ needs.versions.outputs.date }}
