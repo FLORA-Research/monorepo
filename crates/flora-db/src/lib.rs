@@ -15,7 +15,15 @@ pub mod models;
 pub mod queries;
 
 /// Embedded migrations, compiled into the binary.
-pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations");
+///
+/// The directory lives inside the crate, not at the repository root: the
+/// Docker build copies only `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`,
+/// and `crates/`, and `sqlx::migrate!` resolves its path against the crate
+/// manifest dir at compile time. An out-of-crate path (`../../migrations`)
+/// points outside everything the image build copies and fails there, though
+/// it compiles fine on a full checkout. The `./` prefix is required: sqlx
+/// rejects bare single-component relative paths.
+pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
 #[derive(Debug, Error)]
 pub enum DbError {

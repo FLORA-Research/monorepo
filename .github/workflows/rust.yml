@@ -9,7 +9,7 @@ on:
     branches: [main]
     paths:
       - "crates/**"
-      - "migrations/**"
+      - "crates/flora-db/migrations/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -17,7 +17,7 @@ on:
   pull_request:
     paths:
       - "crates/**"
-      - "migrations/**"
+      - "crates/flora-db/migrations/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
