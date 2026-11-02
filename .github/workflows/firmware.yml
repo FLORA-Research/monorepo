@@ -52,7 +52,7 @@ jobs:
       matrix:
         crate: [flora-node, flora-aggregator]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv6m-none-eabi
