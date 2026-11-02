@@ -77,7 +77,9 @@ pub fn verify_bundle(path: &Path, expect_firmware: bool) -> Result<()> {
     );
     if expect_firmware {
         ensure!(
-            archive.file_names().any(|name| name.ends_with(".uf2")),
+            archive
+                .file_names()
+                .any(|name| name.is_ok_and(|name| name.ends_with(".uf2"))),
             "bundle is missing the firmware backup"
         );
     }
@@ -130,8 +132,17 @@ mod tests {
 
         let file = File::open(&path).unwrap();
         let mut archive = zip::ZipArchive::new(file).unwrap();
+        // zip 9's accessors are fallible: a malformed central directory
+        // yields an Err per entry rather than a wrong name.
         let names: Vec<String> = (0..archive.len())
-            .map(|index| archive.by_index(index).unwrap().name().to_owned())
+            .map(|index| {
+                archive
+                    .by_index(index)
+                    .unwrap()
+                    .name()
+                    .unwrap()
+                    .into_owned()
+            })
             .collect();
         assert!(names.contains(&"credentials.json".to_owned()));
         assert!(names.contains(&"pair.svg".to_owned()));

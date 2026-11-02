@@ -59,7 +59,7 @@ sha2 = { version = "0.10", default-features = false }
 # no side allocates to parse a wire message.
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = "1"
-serde-json-core = "0.6"
+serde-json-core = "0.7"
 panic-probe = { version = "1", features = ["print-defmt"] }
 portable-atomic = { version = "1", features = ["critical-section"] }
 static_cell = "2.1"
@@ -78,12 +78,12 @@ argon2 = "0.6"
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio", "ws", "macros"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 dotenvy = "0.15"
-ed25519-dalek = { version = "2", default-features = false, features = ["fast", "zeroize"] }
-getrandom = "0.3"
+ed25519-dalek = { version = "3", default-features = false, features = ["fast", "zeroize"] }
+getrandom = "0.4"
 hex = "0.4"
 jsonwebtoken = { version = "11", default-features = false, features = ["rust_crypto"] }
 password-hash = { version = "0.6", features = ["getrandom"] }
-parking_lot = "0.12"
+parking_lot = "0.13"
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "macros", "migrate", "chrono", "uuid", "json"] }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
