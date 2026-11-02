@@ -1,8 +1,7 @@
 name: flora_app
 description: "FLORA companion app: gateways, plots, irrigation control."
-publish_to: 'none'
-
-version: 1.0.0+1
+publish_to: "none"
+version: 0.1.0+1
 
 environment:
   sdk: ^3.13.4
@@ -11,10 +10,49 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Pairing, secrets, and the local cache.
+  flutter_secure_storage: ^11.2.0
+  shared_preferences: ^2.5.3
+  path_provider: ^2.1.5
+
+  # Signing. Ed25519 keys and signatures must match the Rust crates exactly, so
+  # the canonical byte layout is what matters, not the library.
+  cryptography: ^2.9.0
+
+  # Recovery phrase. BIP39 so a farmer can write twelve words on paper.
+  bip39: ^1.0.6
+
+  # Transport. `dio` for REST, `web_socket_channel` for the live streams.
+  dio: ^5.11.1
+  web_socket_channel: ^3.0.3
+
+  # UI.
+  flutter_riverpod: ^3.4.3
+  fl_chart: ^1.2.0
+  # Locale-aware date formatting for history rows.
+  intl: ^0.20.2
+  mobile_scanner: ^7.4.2
+  cached_network_image: ^3.4.1
+  # Renders an invite as a scannable code.
+  qr_flutter: ^4.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Generates the launcher icon and splash so the app does not ship with the
+  # default Flutter logo.
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/brand/logo.png
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icon/icon.png
+  adaptive_icon_background: "#88552E"
+  adaptive_icon_foreground: assets/icon/icon_foreground.png
