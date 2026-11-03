@@ -9,9 +9,9 @@ use flora_protocol::crc16_ccitt_false;
 
 /// Packed firmware version reported over the bus. Per-crate semver: the
 /// firmware bins bump this with their own versions.
-pub const FW_PACKED: u16 = 0x0100;
+pub const FW_PACKED: u16 = 0x0200;
 /// Human-readable firmware version, also used by the provisioning greeting.
-pub const FIRMWARE_VERSION: &str = "0.1.0";
+pub const FIRMWARE_VERSION: &str = "0.2.0";
 
 /// One flash page holds one config record.
 pub const CONFIG_PAGE_SIZE: usize = 256;

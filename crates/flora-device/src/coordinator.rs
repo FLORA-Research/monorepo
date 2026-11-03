@@ -7,7 +7,7 @@
 
 use flora_protocol::{
     CMD_CALIBRATE, CMD_GET_INFO, CMD_POLL, CMD_SET_THRESHOLD, CMD_SET_VALVE, FIRST_NODE_ADDR,
-    Frame, MAX_FRAME_LEN, encode,
+    Frame, MAX_FRAME_LEN, NodeSample, encode,
 };
 
 /// How many cycles an unreachable node is skipped before being retried.
@@ -34,6 +34,12 @@ pub struct NodeSlot {
     pub state: NodeState,
     /// Monotonic sequence used for the next request to this node.
     pub next_sequence: u16,
+    /// Last `DATA` reply this node sent, kept until a newer one arrives.
+    ///
+    /// Without this the batch builder would have nothing but the
+    /// aggregator's own reading: polling a node and then throwing its
+    /// answer away is the one failure mode that looks like success.
+    pub latest: Option<NodeSample>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,6 +102,7 @@ impl<const N: usize> Poller<N> {
             addr,
             state: NodeState::Reachable,
             next_sequence: sequence,
+            latest: None,
         });
         self.len += 1;
         true
@@ -135,6 +142,17 @@ impl<const N: usize> Poller<N> {
             }
         }
         None
+    }
+
+    /// Keep the reading a node just reported, replacing any older one.
+    ///
+    /// Unknown addresses are ignored: only discovered nodes are polled,
+    /// so a frame from anywhere else is either the aggregator's own echo
+    /// or noise on the bus.
+    pub fn record_sample(&mut self, addr: u8, sample: NodeSample) {
+        if let Some(slot) = self.slot_mut(addr) {
+            slot.latest = Some(sample);
+        }
     }
 
     /// Record a reply. Clears any failure count.

@@ -28,7 +28,7 @@ pub mod batch;
 pub mod command;
 pub mod frame;
 pub mod payload;
-#[cfg(feature = "wire")]
+#[cfg(feature = "provision")]
 pub mod provision;
 pub mod qr;
 pub mod signed;
@@ -57,7 +57,7 @@ pub use payload::{
     DATA_PAYLOAD_LEN, INFO_PAYLOAD_LEN, NodeInfo, SensorFrame, SensorReading, data_payload,
     decode_data, decode_info, info_payload,
 };
-#[cfg(feature = "wire")]
+#[cfg(feature = "provision")]
 pub use provision::{
     AGGREGATOR_HW, Ack, AggregatorHello, HANDSHAKE_VERSION, NODE_HW, NodeHello, SetIdentity,
     SetNodeAddress,

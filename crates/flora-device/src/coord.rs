@@ -12,8 +12,8 @@ use crate::coordinator::{Poller, calibrate_request, set_threshold_request, set_v
 use crate::crypto::{NonceCache, VerifyError, verify_command};
 use flora_drivers::{FW_PACKED, IrrigationController, NodeConfig};
 use flora_protocol::{
-    Batch, KIND_CALIBRATE, KIND_SET_THRESHOLD, KIND_SET_VALVE, MAX_FRAME_LEN, NodeSample,
-    SensorReading, canonical_message,
+    Batch, CMD_DATA, CMD_GET_INFO, KIND_CALIBRATE, KIND_SET_THRESHOLD, KIND_SET_VALVE,
+    MAX_FRAME_LEN, NodeSample, SensorReading, canonical_message, decode_data, decode_info,
 };
 
 /// Aggregator-local node table capacity.
@@ -214,6 +214,40 @@ impl Coordinator {
         Ok(self.route(command))
     }
 
+    /// Fold a node's reply into the coordinator's state.
+    ///
+    /// `INFO` proves the node exists at that address, so the poller starts
+    /// asking it for data; `DATA` carries the reading the next batch will
+    /// report. Anything else is a reply to one of our own requests and
+    /// needs no bookkeeping.
+    pub fn record_reply(&mut self, frame: &flora_protocol::Frame<'_>) {
+        match frame.cmd {
+            CMD_GET_INFO => {
+                if let Some(info) = decode_info(frame.payload) {
+                    self.poller.register(info.address, frame.sequence);
+                }
+            }
+            CMD_DATA => {
+                if let Some(data) = decode_data(frame.payload) {
+                    self.poller.record_sample(
+                        frame.addr,
+                        NodeSample {
+                            node_uuid: data.node_uuid,
+                            addr: frame.addr,
+                            moisture: data.moisture_per_mille.unwrap_or(u16::MAX),
+                            temperature: data.temperature_deci_c.unwrap_or(i16::MIN),
+                            humidity: data.humidity_per_mille.unwrap_or(u16::MAX),
+                            valve_state: u8::from(data.valve_open),
+                            sequence: data.sequence,
+                            firmware: data.fw_ver,
+                        },
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Register a node found during discovery.
     pub fn register_node(&mut self, addr: u8, sequence: u16) -> bool {
         self.poller.register(addr, sequence)
@@ -289,6 +323,16 @@ impl Coordinator {
             sequence: local.sequence,
             firmware: FW_PACKED,
         });
+        // One slot per node still holding a reading. The batch is capped
+        // at `MAX_BATCH_NODES`, so a full table uploads the oldest entries
+        // first and the rest wait for the next batch.
+        for slot in self.poller.slots().iter().flatten() {
+            if let Some(sample) = slot.latest
+                && !batch.push(sample)
+            {
+                break;
+            }
+        }
         batch
     }
 }
@@ -540,6 +584,71 @@ mod tests {
         let len = batch.encode(&mut out).unwrap();
         let json = core::str::from_utf8(&out[..len]).unwrap();
         assert!(json.contains("\"temp\":-32768"), "{json}");
+    }
+
+    #[test]
+    fn polled_node_readings_reach_the_batch() {
+        use flora_protocol::{CMD_DATA, data_payload};
+
+        let mut coordinator = Coordinator::new(*b"agg-0001agg-0001", AGGREGATOR_ADDR);
+        coordinator.register_node(4, 1);
+
+        let reading = SensorReading {
+            soil_raw: 1200,
+            moisture_per_mille: Some(420),
+            temperature_deci_c: Some(213),
+            humidity_per_mille: Some(510),
+            sequence: 9,
+        };
+        let payload = data_payload(&[1, 2, 3, 4, 5, 6, 7, 8], 0x0100, reading, true, 77);
+        let frame = flora_protocol::Frame {
+            addr: 4,
+            cmd: CMD_DATA,
+            sequence: 9,
+            payload: &payload,
+        };
+        coordinator.record_reply(&frame);
+
+        let local = SensorReading {
+            soil_raw: 0,
+            moisture_per_mille: Some(10),
+            temperature_deci_c: None,
+            humidity_per_mille: None,
+            sequence: 1,
+        };
+        let batch = coordinator.build_batch(1_000, local, false);
+        assert_eq!(batch.len, 2, "local reading plus one node");
+        let node = batch.samples[1].unwrap();
+        assert_eq!(node.addr, 4);
+        assert_eq!(node.node_uuid, [1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(node.moisture, 420);
+        assert_eq!(node.temperature, 213);
+        assert_eq!(node.humidity, 510);
+        assert_eq!(node.valve_state, 1);
+        assert_eq!(node.sequence, 9);
+
+        // A second reply replaces the reading rather than adding a row.
+        let newer = data_payload(
+            &[1, 2, 3, 4, 5, 6, 7, 8],
+            0x0100,
+            SensorReading {
+                sequence: 10,
+                moisture_per_mille: Some(430),
+                ..reading
+            },
+            false,
+            80,
+        );
+        coordinator.record_reply(&flora_protocol::Frame {
+            addr: 4,
+            cmd: CMD_DATA,
+            sequence: 10,
+            payload: &newer,
+        });
+        let batch = coordinator.build_batch(2_000, local, false);
+        assert_eq!(batch.len, 2);
+        assert_eq!(batch.samples[1].unwrap().moisture, 430);
+        assert_eq!(batch.samples[1].unwrap().sequence, 10);
     }
 
     #[test]

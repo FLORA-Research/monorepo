@@ -1465,7 +1465,7 @@ dependencies = [
 
 [[package]]
 name = "flora-aggregator"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -1473,17 +1473,24 @@ dependencies = [
  "cyw43-pio",
  "defmt 1.2.0",
  "defmt-rtt",
+ "ed25519-compact",
  "embassy-executor",
  "embassy-net",
  "embassy-rp",
  "embassy-time",
  "embassy-usb",
+ "embedded-hal-nb",
  "embedded-io-async 0.7.0",
  "embedded-nal-async",
  "flora-device",
+ "flora-drivers",
+ "flora-protocol",
  "heapless 0.9.3",
  "panic-probe",
  "portable-atomic",
+ "serde",
+ "serde-json-core",
+ "sha2 0.10.9",
  "static_cell",
 ]
 
@@ -1588,7 +1595,7 @@ dependencies = [
 
 [[package]]
 name = "flora-node"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -1597,10 +1604,16 @@ dependencies = [
  "embassy-executor",
  "embassy-rp",
  "embassy-time",
+ "embassy-usb",
+ "embedded-hal-nb",
  "flora-device",
+ "flora-drivers",
+ "flora-protocol",
  "heapless 0.9.3",
  "panic-probe",
  "portable-atomic",
+ "serde",
+ "serde-json-core",
  "static_cell",
 ]
 

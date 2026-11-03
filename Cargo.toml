@@ -67,6 +67,9 @@ static_cell = "2.1"
 # Aggregator only: Pico W radio and network stack. `cyw43-pio` must match
 # embassy-rp's major.minor or two incompatible HAL copies get compiled.
 embassy-net = { version = "0.9", default-features = false, features = ["tcp", "udp", "dns", "dhcpv4", "medium-ethernet"] }
+# Byte-at-a-time RS-485 receive on a blocking UART: embassy-rp implements
+# the `embedded-hal-nb` traits, which the firmware reads through.
+embedded-hal-nb = "1"
 embedded-io-async = "0.7"
 embedded-nal-async = "0.9"
 cyw43 = { version = "0.7", default-features = false, features = ["defmt"] }

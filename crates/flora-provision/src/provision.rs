@@ -95,10 +95,17 @@ pub fn provision_aggregator_with_cloud<R: Read + Write>(
 ) -> Result<ProvisionedAggregator> {
     let hello: AggregatorHello = handshake::read_aggregator_hello(serial, timeout)?;
     let (mut artifact, device_dir) = artifacts::prepare_pending(output_root, &hello, label)?;
+    // A bench run has no cloud URL; the firmware treats an empty one as
+    // "uplink disabled" and still stores the identity.
+    let cloud_url = cloud_target
+        .map(|target| target.base_url.as_str())
+        .unwrap_or("");
     handshake::set_aggregator_identity(
         serial,
         &artifact.device_id,
+        &artifact.device_id,
         &artifact.device_token,
+        cloud_url,
         timeout,
     )?;
 
@@ -224,9 +231,11 @@ mod tests {
                             }
                         }
                         Some("set_identity") => {
+                            let gateway_id = request["gateway_id"].as_str().unwrap_or_default();
                             let device_id = request["device_id"].as_str().unwrap_or_default();
-                            let token = request["token"].as_str().unwrap_or_default();
-                            if device_id.len() != 32 || token.len() != 64 {
+                            let token = request["device_token"].as_str().unwrap_or_default();
+                            if gateway_id.len() != 32 || device_id.len() != 32 || token.len() != 64
+                            {
                                 return Err(io::Error::new(
                                     io::ErrorKind::InvalidData,
                                     "invalid identity fields",
@@ -300,7 +309,10 @@ mod tests {
             .is_err()
         );
         assert_eq!(first.requests.len(), 1);
-        let first_token = first.requests[0]["token"].as_str().unwrap().to_owned();
+        let first_token = first.requests[0]["device_token"]
+            .as_str()
+            .unwrap()
+            .to_owned();
         let device_id = first.requests[0]["device_id"].as_str().unwrap().to_owned();
         let credentials_path = temp.path().join(&device_id).join("credentials.json");
         let pending: GatewayArtifact =
@@ -318,7 +330,7 @@ mod tests {
         .unwrap();
         assert_eq!(completed.device_id, device_id);
         assert_eq!(
-            retry.requests[0]["token"].as_str(),
+            retry.requests[0]["device_token"].as_str(),
             Some(first_token.as_str())
         );
         let saved: GatewayArtifact =

@@ -1,6 +1,6 @@
 //! The WiFi access-point dictionary.
 //!
-//! The dictionary lives in `wifi.toml` at the repository root and is baked
+//! The dictionary lives in `crates/flora-aggregator/wifi.toml` and is baked
 //! into the firmware with `include_str!` at build time. The firmware never
 //! has an allocator, so the file is parsed into a fixed-size
 //! [`heapless::Vec`] by a small TOML-subset reader below: exactly the file's
@@ -514,7 +514,7 @@ mod tests {
     fn the_shipped_dictionary_parses() {
         // Parse the real file the firmware bakes in, so editing wifi.toml
         // can never silently break the build's network setup.
-        let networks = parse_dictionary(include_str!("../../../wifi.toml")).unwrap();
+        let networks = parse_dictionary(include_str!("../wifi.toml")).unwrap();
         assert!(!networks.is_empty());
         for network in &networks {
             assert!(network.is_consistent());

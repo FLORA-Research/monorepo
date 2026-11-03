@@ -179,24 +179,24 @@ fn provisioning_requests_carry_their_command_names() {
     // The v1 bug class this struct exists to kill: an aggregator request
     // missing credentials must fail to deserialize, not silently default
     // to empty strings that would strand the device off the network.
+    // WiFi is not part of this message: the access-point dictionary is
+    // compiled into the firmware from `wifi.toml`.
     let request = SetIdentity {
         cmd: SetIdentity::CMD,
         gateway_id: "6167672d303030316167672d30303031",
         device_id: "6167672d303030316167672d30303031",
         device_token: "00112233445566778899aabbccddeeff",
         cloud_url: "https://cloud.flora.example",
-        wifi_ssid: "field-net",
-        wifi_password: "hunter2",
     };
     let json = serde_json::to_string(&request).unwrap();
     let parsed: SetIdentity = serde_json::from_str(&json).unwrap();
-    assert_eq!(parsed.wifi_ssid, "field-net");
+    assert_eq!(parsed.cloud_url, "https://cloud.flora.example");
 
-    // Dropping the wifi_password field breaks the parse — the v1
-    // `#[serde(default)]` would have accepted it as an empty string.
+    // Dropping cloud_url breaks the parse — the v1 `#[serde(default)]`
+    // would have accepted it as an empty string.
     let broken: String = json
         .split(',')
-        .filter(|field| !field.contains("wifi_password"))
+        .filter(|field| !field.contains("cloud_url"))
         .collect::<Vec<_>>()
         .join(",");
     assert!(serde_json::from_str::<SetIdentity>(&broken).is_err());

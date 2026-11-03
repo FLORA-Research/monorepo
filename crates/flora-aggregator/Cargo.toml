@@ -1,6 +1,6 @@
 [package]
 name = "flora-aggregator"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 
@@ -29,6 +29,9 @@ firmware = [
     "dep:embassy-usb",
     "dep:cyw43",
     "dep:cyw43-pio",
+    "dep:ed25519-compact",
+    "dep:sha2",
+    "dep:embedded-hal-nb",
     "dep:embedded-io-async",
     "dep:embedded-nal-async",
     "dep:panic-probe",
@@ -38,6 +41,12 @@ firmware = [
 
 [dependencies]
 flora-device = { workspace = true }
+flora-drivers = { workspace = true }
+flora-protocol = { workspace = true, features = ["provision"] }
+# Borrowed JSON parsing for the command queue: `&str` fields point into the
+# HTTP response, so a poll costs no allocation.
+serde = { workspace = true, features = ["derive"] }
+serde-json-core = { workspace = true }
 # The wifi dictionary module (host-testable) uses heapless vectors without
 # the firmware feature; the Embassy path reuses the same dependency.
 heapless = { workspace = true }
@@ -52,6 +61,11 @@ embassy-time = { workspace = true, optional = true }
 embassy-usb = { workspace = true, optional = true }
 cyw43 = { workspace = true, optional = true }
 cyw43-pio = { workspace = true, optional = true }
+# The provisioning greeting's public key is derived from the board's flash
+# unique id; the device never signs with it, but the key must be real-shaped.
+ed25519-compact = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+embedded-hal-nb = { workspace = true, optional = true }
 embedded-io-async = { workspace = true, optional = true }
 embedded-nal-async = { workspace = true, optional = true }
 panic-probe = { workspace = true, optional = true }

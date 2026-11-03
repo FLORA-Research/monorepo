@@ -54,12 +54,9 @@ struct SetNodeAddress {
     address: u8,
 }
 
-#[derive(Serialize)]
-struct SetIdentity<'a> {
-    cmd: &'static str,
-    device_id: &'a str,
-    token: &'a str,
-}
+// The provisioning request shapes are shared with the firmware through
+// `flora_protocol::provision`; a private copy here is what let v1's two
+// sides drift. `SetIdentity` is imported rather than redefined.
 
 #[derive(Deserialize)]
 struct Ack {
@@ -135,16 +132,22 @@ pub fn set_node_address<R: Read + Write>(
 
 pub fn set_aggregator_identity<R: Read + Write>(
     stream: &mut R,
+    gateway_id: &str,
     device_id: &str,
     token: &str,
+    cloud_url: &str,
     timeout: Duration,
 ) -> Result<()> {
+    // The same struct the firmware parses, so a forgotten field cannot
+    // silently provision half an identity.
     write_json_line(
         stream,
-        &SetIdentity {
-            cmd: "set_identity",
+        &flora_protocol::provision::SetIdentity {
+            cmd: flora_protocol::provision::SetIdentity::CMD,
+            gateway_id,
             device_id,
-            token,
+            device_token: token,
+            cloud_url,
         },
     )?;
     read_ack(stream, timeout).context("aggregator rejected identity provisioning")
@@ -278,7 +281,9 @@ mod tests {
             set_aggregator_identity(
                 &mut stream,
                 &"a".repeat(32),
+                &"a".repeat(32),
                 &"b".repeat(64),
+                "http://127.0.0.1:8080",
                 Duration::from_secs(1)
             )
             .is_err()

@@ -15,11 +15,11 @@ use flora_protocol::GATEWAY_ID_LEN;
 
 /// Page size for a storage record.
 ///
-/// Larger than the node's config page because an identity record carries
-/// the cloud URL and the WiFi credentials as well as the device token.
-/// It stays under one erase sector, which is what keeps a bank
-/// independently erasable.
-pub const RECORD_PAGE_SIZE: usize = 512;
+/// The same size as the node config page: the identity record is fixed
+/// fields plus the three strings, so one 256-byte page holds it with
+/// room to spare. It stays under one erase sector, which is what keeps a
+/// bank independently erasable.
+pub const RECORD_PAGE_SIZE: usize = 256;
 
 /// Longest device token accepted, in hex characters. 32 bytes, matching
 /// the provisioner's `generate_device_token`.
@@ -29,10 +29,6 @@ pub const DEVICE_TOKEN_HEX_LEN: usize = 64;
 pub const DEVICE_ID_LEN: usize = 32;
 /// Longest cloud URL accepted, including scheme and a trailing slash.
 pub const CLOUD_URL_LEN: usize = 96;
-/// Longest WiFi SSID accepted. 32 is the 802.11 limit.
-pub const WIFI_SSID_LEN: usize = 32;
-/// Longest WiFi password accepted. 63 is the WPA2 passphrase limit.
-pub const WIFI_PASSWORD_LEN: usize = 63;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StorageError {
@@ -47,7 +43,7 @@ pub enum StorageError {
 }
 
 /// Everything the cloud uplink needs, held in flash.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Identity {
     pub gateway_id: [u8; GATEWAY_ID_LEN],
     device_id: [u8; DEVICE_ID_LEN],
@@ -56,10 +52,6 @@ pub struct Identity {
     device_token_len: u8,
     cloud_url: [u8; CLOUD_URL_LEN],
     cloud_url_len: u8,
-    wifi_ssid: [u8; WIFI_SSID_LEN],
-    wifi_ssid_len: u8,
-    wifi_password: [u8; WIFI_PASSWORD_LEN],
-    wifi_password_len: u8,
 }
 
 impl Identity {
@@ -71,15 +63,15 @@ impl Identity {
         device_token_len: 0,
         cloud_url: [0; CLOUD_URL_LEN],
         cloud_url_len: 0,
-        wifi_ssid: [0; WIFI_SSID_LEN],
-        wifi_ssid_len: 0,
-        wifi_password: [0; WIFI_PASSWORD_LEN],
-        wifi_password_len: 0,
     };
 
     /// Whether commissioning has happened.
+    ///
+    /// The cloud URL is deliberately not required: a bench-provisioned
+    /// board has an identity and no uplink target, and the aggregator
+    /// treats an empty URL as "uplink disabled".
     pub fn is_provisioned(&self) -> bool {
-        self.device_id_len > 0 && self.device_token_len > 0 && self.cloud_url_len > 0
+        self.device_id_len > 0 && self.device_token_len > 0
     }
 
     pub fn device_id(&self) -> &str {
@@ -94,14 +86,6 @@ impl Identity {
         str::from_utf8(&self.cloud_url[..self.cloud_url_len as usize]).unwrap_or("")
     }
 
-    pub fn wifi_ssid(&self) -> &str {
-        str::from_utf8(&self.wifi_ssid[..self.wifi_ssid_len as usize]).unwrap_or("")
-    }
-
-    pub fn wifi_password(&self) -> &str {
-        str::from_utf8(&self.wifi_password[..self.wifi_password_len as usize]).unwrap_or("")
-    }
-
     /// Build an identity from the strings handed over during
     /// commissioning.
     pub fn from_parts(
@@ -109,16 +93,12 @@ impl Identity {
         device_id: &str,
         device_token: &str,
         cloud_url: &str,
-        wifi_ssid: &str,
-        wifi_password: &str,
     ) -> Result<Self, StorageError> {
         let mut identity = Self::EMPTY;
         identity.gateway_id = gateway_id;
         identity.device_id_len = copy_field(device_id, &mut identity.device_id)?;
         identity.device_token_len = copy_field(device_token, &mut identity.device_token)?;
         identity.cloud_url_len = copy_field(cloud_url, &mut identity.cloud_url)?;
-        identity.wifi_ssid_len = copy_field(wifi_ssid, &mut identity.wifi_ssid)?;
-        identity.wifi_password_len = copy_field(wifi_password, &mut identity.wifi_password)?;
         Ok(identity)
     }
 }
@@ -171,24 +151,20 @@ pub fn copy_field(value: &str, out: &mut [u8]) -> Result<u8, StorageError> {
 ///   0   magic "FLID" (4)
 ///   4   generation (4, big-endian)
 ///   8   gateway id (16)
-///  24   device id len (1) | device token len (1) | cloud url len (1) | ssid len (1) | password len (1)
-///  29   device id (32)
-///  61   device token (64)
-/// 125   cloud url (96)
-/// 221   wifi ssid (32)
-/// 253   wifi password (63)
-/// 316   crc32 (4)
+///  24   device id len (1) | device token len (1) | cloud url len (1)
+///  27   device id (32)
+///  59   device token (64)
+/// 123   cloud url (96)
+/// 219   crc32 (4)
 /// ```
 const MAGIC: [u8; 4] = *b"FLID";
 const OFF_GENERATION: usize = 4;
 const OFF_GATEWAY_ID: usize = 8;
 const OFF_LENGTHS: usize = 24;
-const OFF_DEVICE_ID: usize = 29;
+const OFF_DEVICE_ID: usize = OFF_LENGTHS + 3;
 const OFF_DEVICE_TOKEN: usize = OFF_DEVICE_ID + DEVICE_ID_LEN;
 const OFF_CLOUD_URL: usize = OFF_DEVICE_TOKEN + DEVICE_TOKEN_HEX_LEN;
-const OFF_WIFI_SSID: usize = OFF_CLOUD_URL + CLOUD_URL_LEN;
-const OFF_WIFI_PASSWORD: usize = OFF_WIFI_SSID + WIFI_SSID_LEN;
-const OFF_CRC: usize = OFF_WIFI_PASSWORD + WIFI_PASSWORD_LEN;
+const OFF_CRC: usize = OFF_CLOUD_URL + CLOUD_URL_LEN;
 const RECORD_END: usize = OFF_CRC + 4;
 
 /// The record must fit one page, and a page must fit one erase sector.
@@ -202,15 +178,10 @@ pub fn encode_identity(identity: &Identity, generation: u32, page: &mut [u8; REC
     page[OFF_LENGTHS] = identity.device_id_len;
     page[OFF_LENGTHS + 1] = identity.device_token_len;
     page[OFF_LENGTHS + 2] = identity.cloud_url_len;
-    page[OFF_LENGTHS + 3] = identity.wifi_ssid_len;
-    page[OFF_LENGTHS + 4] = identity.wifi_password_len;
     page[OFF_DEVICE_ID..OFF_DEVICE_ID + DEVICE_ID_LEN].copy_from_slice(&identity.device_id);
     page[OFF_DEVICE_TOKEN..OFF_DEVICE_TOKEN + DEVICE_TOKEN_HEX_LEN]
         .copy_from_slice(&identity.device_token);
     page[OFF_CLOUD_URL..OFF_CLOUD_URL + CLOUD_URL_LEN].copy_from_slice(&identity.cloud_url);
-    page[OFF_WIFI_SSID..OFF_WIFI_SSID + WIFI_SSID_LEN].copy_from_slice(&identity.wifi_ssid);
-    page[OFF_WIFI_PASSWORD..OFF_WIFI_PASSWORD + WIFI_PASSWORD_LEN]
-        .copy_from_slice(&identity.wifi_password);
     let crc = crc32(&page[..OFF_CRC]);
     page[OFF_CRC..OFF_CRC + 4].copy_from_slice(&crc.to_be_bytes());
 }
@@ -231,8 +202,6 @@ pub fn decode_identity(page: &[u8; RECORD_PAGE_SIZE]) -> Option<(u32, Identity)>
     identity.device_id_len = bounded(page[OFF_LENGTHS], DEVICE_ID_LEN)?;
     identity.device_token_len = bounded(page[OFF_LENGTHS + 1], DEVICE_TOKEN_HEX_LEN)?;
     identity.cloud_url_len = bounded(page[OFF_LENGTHS + 2], CLOUD_URL_LEN)?;
-    identity.wifi_ssid_len = bounded(page[OFF_LENGTHS + 3], WIFI_SSID_LEN)?;
-    identity.wifi_password_len = bounded(page[OFF_LENGTHS + 4], WIFI_PASSWORD_LEN)?;
 
     identity.device_id[..DEVICE_ID_LEN]
         .copy_from_slice(&page[OFF_DEVICE_ID..OFF_DEVICE_ID + DEVICE_ID_LEN]);
@@ -240,10 +209,6 @@ pub fn decode_identity(page: &[u8; RECORD_PAGE_SIZE]) -> Option<(u32, Identity)>
         .copy_from_slice(&page[OFF_DEVICE_TOKEN..OFF_DEVICE_TOKEN + DEVICE_TOKEN_HEX_LEN]);
     identity.cloud_url[..CLOUD_URL_LEN]
         .copy_from_slice(&page[OFF_CLOUD_URL..OFF_CLOUD_URL + CLOUD_URL_LEN]);
-    identity.wifi_ssid[..WIFI_SSID_LEN]
-        .copy_from_slice(&page[OFF_WIFI_SSID..OFF_WIFI_SSID + WIFI_SSID_LEN]);
-    identity.wifi_password[..WIFI_PASSWORD_LEN]
-        .copy_from_slice(&page[OFF_WIFI_PASSWORD..OFF_WIFI_PASSWORD + WIFI_PASSWORD_LEN]);
 
     // Every stored string must be valid UTF-8, or the accessors would
     // silently return empty and the device would look unprovisioned
@@ -252,8 +217,6 @@ pub fn decode_identity(page: &[u8; RECORD_PAGE_SIZE]) -> Option<(u32, Identity)>
         identity.device_id(),
         identity.device_token(),
         identity.cloud_url(),
-        identity.wifi_ssid(),
-        identity.wifi_password(),
     ] {
         str::from_utf8(value.as_bytes()).ok()?;
     }
@@ -303,8 +266,6 @@ mod tests {
             "9a2db2e23f1504cd056606553ac049c5",
             &"ab".repeat(32),
             "https://flora-api.onrender.com",
-            "plot-north",
-            "correct horse battery",
         )
         .unwrap()
     }
@@ -320,8 +281,6 @@ mod tests {
         assert_eq!(decoded.device_id(), "9a2db2e23f1504cd056606553ac049c5");
         assert_eq!(decoded.device_token(), "ab".repeat(32));
         assert_eq!(decoded.cloud_url(), "https://flora-api.onrender.com");
-        assert_eq!(decoded.wifi_ssid(), "plot-north");
-        assert_eq!(decoded.wifi_password(), "correct horse battery");
     }
 
     #[test]
@@ -371,15 +330,13 @@ mod tests {
             &"a".repeat(DEVICE_ID_LEN),
             &"b".repeat(DEVICE_TOKEN_HEX_LEN),
             &"c".repeat(CLOUD_URL_LEN),
-            &"d".repeat(WIFI_SSID_LEN),
-            &"e".repeat(WIFI_PASSWORD_LEN),
         )
         .expect("exactly the limit must fit");
         let mut page = [0xFFu8; RECORD_PAGE_SIZE];
         encode_identity(&identity, 1, &mut page);
         let (_, decoded) = decode_identity(&page).expect("decodes");
         assert_eq!(decoded.device_id().len(), DEVICE_ID_LEN);
-        assert_eq!(decoded.wifi_password().len(), WIFI_PASSWORD_LEN);
+        assert_eq!(decoded.cloud_url().len(), CLOUD_URL_LEN);
     }
 
     #[test]
@@ -398,8 +355,6 @@ mod tests {
             "9a2db2e23f1504cd056606553ac049c5",
             "",
             "https://flora-api.onrender.com",
-            "ssid",
-            "password",
         )
         .unwrap();
         assert!(!identity.is_provisioned());
