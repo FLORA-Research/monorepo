@@ -59,6 +59,13 @@ pub struct AppState {
     pub claim_limiter: Arc<RateLimiter>,
     pub auth_limiter: Arc<RateLimiter>,
     pub command_limiter: Arc<RateLimiter>,
+    /// Test bench mode: any authenticated account may act on any gateway,
+    /// and signing in creates the account on first contact.
+    ///
+    /// Off unless `FLORA_TEST_MODE` is set. Production must never enable it:
+    /// it turns per-account ownership into "anyone with a session", which is
+    /// only acceptable on a throwaway bench server.
+    pub test_mode: bool,
 }
 
 impl AppState {
@@ -73,7 +80,17 @@ impl AppState {
             auth_limiter: Arc::new(RateLimiter::new(60, 10)),
             // 30 commands per account per minute, per the plan.
             command_limiter: Arc::new(RateLimiter::new(60, crate::commands::COMMANDS_PER_MINUTE)),
+            test_mode: std::env::var("FLORA_TEST_MODE")
+                .map(|value| matches!(value.trim(), "1" | "true" | "yes"))
+                .unwrap_or(false),
         }
+    }
+
+    /// Whether `account_id` may act on this gateway.
+    ///
+    /// One helper so the test-mode bypass cannot be forgotten in a handler.
+    pub fn may_act(&self, gateway: &flora_db::models::Gateway, account_id: uuid::Uuid) -> bool {
+        self.test_mode || gateway.owned_by(account_id)
     }
 }
 

@@ -70,30 +70,37 @@ pub async fn claim(
     ensure_not_retired(&gateway).map_err(|_| ApiError::Conflict("gateway is retired".into()))?;
 
     // Fetch and check the claim token.
-    /// Stored claim: token hash, expiry, and consumption time.
-    type StoredClaim = (
-        Vec<u8>,
-        chrono::DateTime<Utc>,
-        Option<chrono::DateTime<Utc>>,
-    );
+    //
+    // On a test bench (`FLORA_TEST_MODE`) the token is not checked: any phone
+    // that reaches this endpoint joins the gateway, which is what makes the
+    // prototype usable without re-provisioning a QR per device. The signature
+    // is still verified above, so the caller still proves key ownership.
+    if !state.test_mode {
+        /// Stored claim: token hash, expiry, and consumption time.
+        type StoredClaim = (
+            Vec<u8>,
+            chrono::DateTime<Utc>,
+            Option<chrono::DateTime<Utc>>,
+        );
 
-    let stored: Option<StoredClaim> = sqlx::query_as(
-        "SELECT token_hash, expires_at, used_at FROM claim_tokens WHERE device_id = $1",
-    )
-    .bind(&body.device_id)
-    .fetch_optional(&state.pool)
-    .await?;
-    let (stored_hash, expires_at, used_at) = stored.ok_or(ApiError::NotFound)?;
-    claim_is_usable(expires_at, used_at, now)
-        .map_err(|_| ApiError::Conflict("claim token is expired or already used".into()))?;
-    claim_token_matches(&claim_token, &stored_hash).map_err(|_| ApiError::Unauthorized)?;
+        let stored: Option<StoredClaim> = sqlx::query_as(
+            "SELECT token_hash, expires_at, used_at FROM claim_tokens WHERE device_id = $1",
+        )
+        .bind(&body.device_id)
+        .fetch_optional(&state.pool)
+        .await?;
+        let (stored_hash, expires_at, used_at) = stored.ok_or(ApiError::NotFound)?;
+        claim_is_usable(expires_at, used_at, now)
+            .map_err(|_| ApiError::Conflict("claim token is expired or already used".into()))?;
+        claim_token_matches(&claim_token, &stored_hash).map_err(|_| ApiError::Unauthorized)?;
 
-    // Consume atomically. A concurrent claim with the same token finds nothing.
-    let consumed =
-        flora_db::queries::consume_claim_token(&state.pool, &body.device_id, &stored_hash, now)
-            .await?;
-    if consumed.is_none() {
-        return Err(ApiError::Conflict("claim token was already used".into()));
+        // Consume atomically. A concurrent claim with the same token finds nothing.
+        let consumed =
+            flora_db::queries::consume_claim_token(&state.pool, &body.device_id, &stored_hash, now)
+                .await?;
+        if consumed.is_none() {
+            return Err(ApiError::Conflict("claim token was already used".into()));
+        }
     }
 
     // Attach to an existing account, or create one. This is the only place an
@@ -134,7 +141,8 @@ pub async fn claim(
     };
 
     sqlx::query(
-        "UPDATE gateways SET account_id = $2, status = 'claimed', claimed_at = $3,
+        "UPDATE gateways SET account_id = COALESCE(account_id, $2), status = 'claimed',
+                             claimed_at = COALESCE(claimed_at, $3),
                              label = COALESCE($4, label)
          WHERE id = $1",
     )

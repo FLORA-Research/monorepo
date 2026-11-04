@@ -144,7 +144,7 @@ pub async fn submit(
     let gateway = flora_db::queries::gateway_by_id(&state.pool, &gateway_id)
         .await?
         .ok_or(ApiError::NotFound)?;
-    if !gateway.owned_by(claims.sub) {
+    if !state.may_act(&gateway, claims.sub) {
         return Err(ApiError::Forbidden);
     }
 
@@ -373,7 +373,7 @@ pub async fn list_commands(
     let gateway = flora_db::queries::gateway_by_id(&state.pool, &gateway_id)
         .await?
         .ok_or(ApiError::NotFound)?;
-    if !gateway.owned_by(claims.sub) {
+    if !state.may_act(&gateway, claims.sub) {
         return Err(ApiError::Forbidden);
     }
 

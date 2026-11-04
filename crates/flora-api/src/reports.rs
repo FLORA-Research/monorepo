@@ -276,7 +276,7 @@ async fn selected_gateways(
             let gateway = flora_db::queries::gateway_by_id(&state.pool, gateway_id)
                 .await?
                 .ok_or(ApiError::NotFound)?;
-            if !gateway.owned_by(account_id) {
+            if !state.may_act(&gateway, account_id) {
                 return Err(ApiError::Forbidden);
             }
             Ok(vec![gateway.id])

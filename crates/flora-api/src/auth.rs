@@ -98,9 +98,32 @@ pub async fn verify(
     flora_protocol::verify_command_signature(&pubkey, &auth_message(&pubkey, &nonce), &signature)
         .map_err(|_| ApiError::Unauthorized)?;
 
-    let device = flora_db::queries::live_app_device_by_pubkey(&state.pool, &pubkey)
-        .await?
-        .ok_or(ApiError::NotFound)?;
+    // On a test bench an unknown key signs in by creating its account, the
+    // same way a first claim would. Production keeps the 404: an account is
+    // born from claiming a gateway, not from asking.
+    let device = match flora_db::queries::live_app_device_by_pubkey(&state.pool, &pubkey).await? {
+        Some(device) => device,
+        None if state.test_mode => {
+            let account_id = uuid::Uuid::new_v4();
+            sqlx::query("INSERT INTO accounts (id, owner_pubkey) VALUES ($1, $2)")
+                .bind(account_id)
+                .bind(&pubkey)
+                .execute(&state.pool)
+                .await?;
+            sqlx::query(
+                "INSERT INTO app_devices (account_id, pubkey, label)
+                 VALUES ($1, $2, 'test-client')",
+            )
+            .bind(account_id)
+            .bind(&pubkey)
+            .execute(&state.pool)
+            .await?;
+            flora_db::queries::live_app_device_by_pubkey(&state.pool, &pubkey)
+                .await?
+                .ok_or(ApiError::Internal("app device vanished".into()))?
+        }
+        None => return Err(ApiError::NotFound),
+    };
 
     sqlx::query("UPDATE app_devices SET last_seen = $2 WHERE id = $1")
         .bind(device.id)

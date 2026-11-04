@@ -141,7 +141,7 @@ async fn owned_gateway(
     let gateway = flora_db::queries::gateway_by_id(&state.pool, gateway_id)
         .await?
         .ok_or(ApiError::NotFound)?;
-    if !gateway.owned_by(claims.sub) {
+    if !state.may_act(&gateway, claims.sub) {
         return Err(ApiError::NotFound);
     }
     Ok(claims.sub)

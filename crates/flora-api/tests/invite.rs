@@ -51,6 +51,7 @@ async fn state() -> AppState {
         claim_limiter: Arc::new(RateLimiter::new(60, 1000)),
         auth_limiter: Arc::new(RateLimiter::new(60, 1000)),
         command_limiter: Arc::new(RateLimiter::new(60, 1000)),
+        test_mode: false,
         events: Arc::new(flora_api::stream::EventHub::new()),
     }
 }

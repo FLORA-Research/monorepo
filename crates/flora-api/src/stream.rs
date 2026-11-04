@@ -185,7 +185,7 @@ async fn serve(socket: WebSocket, state: AppState, only_gateway: Option<String>)
     // watch any plot's data by guessing its id.
     if let Some(gateway_id) = only_gateway.as_deref() {
         match flora_db::queries::gateway_by_id(&state.pool, gateway_id).await {
-            Ok(Some(gateway)) if gateway.owned_by(claims.sub) => {}
+            Ok(Some(gateway)) if state.may_act(&gateway, claims.sub) => {}
             _ => {
                 let _ = sink.send(Message::Close(None)).await;
                 return;
