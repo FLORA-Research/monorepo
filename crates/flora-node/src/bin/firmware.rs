@@ -114,37 +114,38 @@ async fn main(spawner: Spawner) {
         let desired_valve = irrigation.update_auto(reading.moisture_per_mille, &config, now_s);
         set_valve(&mut valve_pin, &mut valve_open, desired_valve);
 
-        if let Ok(byte) = embedded_hal_nb::serial::Read::read(&mut uart) {
-            if let Some(frame_len) = receive.push(byte, Instant::now()) {
-                if let Ok(frame) = frame::decode(receive.bytes(frame_len)) {
-                    let old_config = config;
-                    let response = processor.process(
-                        frame,
-                        &mut config,
-                        reading,
-                        &mut irrigation,
-                        node_uuid,
-                        now_s,
-                    );
-                    if config != old_config {
-                        // A config that cannot persist must not appear to
-                        // have applied: NACK and cache the corrected reply.
-                        if storage.save_config(config).is_err() {
-                            config = old_config;
-                            let nack =
-                                Some(nack_for(frame.addr, frame.cmd, frame.sequence, NACK_BUSY));
-                            if let Some(response) = nack {
-                                processor.replace_cached_response(response);
-                            }
-                        }
-                    }
-                    if let Some(response) = response {
-                        set_valve(&mut valve_pin, &mut valve_open, irrigation.is_open());
-                        transmit_response(&mut uart, &mut de_pin, response).await;
-                    }
+        if let Ok(byte) = embedded_hal_nb::serial::Read::read(&mut uart)
+            && let Some(frame_len) = receive.push(byte, Instant::now())
+        {
+            // A corrupt frame is silence, not an error to report: the
+            // aggregator retries on its own schedule.
+            if let Ok(frame) = frame::decode(receive.bytes(frame_len)) {
+                let old_config = config;
+                let response = processor.process(
+                    frame,
+                    &mut config,
+                    reading,
+                    &mut irrigation,
+                    node_uuid,
+                    now_s,
+                );
+                if config != old_config && storage.save_config(config).is_err() {
+                    // A config that cannot persist must not appear to
+                    // have applied: NACK and cache the corrected reply.
+                    config = old_config;
+                    processor.replace_cached_response(nack_for(
+                        frame.addr,
+                        frame.cmd,
+                        frame.sequence,
+                        NACK_BUSY,
+                    ));
                 }
-                receive.reset();
+                if let Some(response) = response {
+                    set_valve(&mut valve_pin, &mut valve_open, irrigation.is_open());
+                    transmit_response(&mut uart, &mut de_pin, response).await;
+                }
             }
+            receive.reset();
         }
 
         if Instant::now() >= next_sample {
@@ -201,9 +202,9 @@ async fn commission_over_usb(
     loop {
         cdc.wait_connection().await;
         let mut greeting: String<128> = String::new();
-        if write!(
+        if writeln!(
             greeting,
-            "{{\"flora_prov\":{},\"hw\":\"{}\",\"fw\":\"{}\",\"uuid\":\"{}\"}}\n",
+            "{{\"flora_prov\":{},\"hw\":\"{}\",\"fw\":\"{}\",\"uuid\":\"{}\"}}",
             flora_protocol::HANDSHAKE_VERSION,
             flora_protocol::NODE_HW,
             FIRMWARE_VERSION,

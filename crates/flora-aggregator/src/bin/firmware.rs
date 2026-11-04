@@ -906,9 +906,9 @@ async fn commission_over_usb(
     loop {
         cdc.wait_connection().await;
         let mut greeting: heapless::String<192> = heapless::String::new();
-        if write!(
+        if writeln!(
             greeting,
-            "{{\"flora_prov\":{},\"hw\":\"{}\",\"fw\":\"{}\",\"pubkey\":\"{}\",\"uuid\":\"{}\"}}\n",
+            "{{\"flora_prov\":{},\"hw\":\"{}\",\"fw\":\"{}\",\"pubkey\":\"{}\",\"uuid\":\"{}\"}}",
             flora_protocol::HANDSHAKE_VERSION,
             flora_protocol::AGGREGATOR_HW,
             FIRMWARE_VERSION,
