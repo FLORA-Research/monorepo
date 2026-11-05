@@ -158,6 +158,20 @@ pub async fn record_nonce(
     Ok(result.rows_affected() == 1)
 }
 
+/// Every gateway, newest first. Only the test-mode listing uses this: on a
+/// bench every phone must see the one device, and ownership would exclude
+/// all but the first claimer.
+pub async fn all_gateways(pool: &PgPool) -> Result<Vec<Gateway>, QueryError> {
+    let gateways = sqlx::query_as::<_, Gateway>(
+        "SELECT id, account_id, pubkey, label, status, fw_version,
+                last_seen, claimed_at, retired_at, created_at
+         FROM gateways ORDER BY created_at DESC",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(gateways)
+}
+
 #[cfg(test)]
 mod tests {
     // Query behaviour against a live database is covered by the

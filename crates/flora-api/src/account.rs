@@ -37,11 +37,16 @@ pub async fn me(
     .await?
     .ok_or(ApiError::Unauthorized)?;
 
-    let gateways = flora_db::queries::gateways_for_account(&state.pool, claims.sub)
-        .await?
-        .into_iter()
-        .map(GatewaySummary::from)
-        .collect();
+    // Test mode lists every gateway: the bench has one device and every
+    // phone must see it, which account-scoped ownership would prevent.
+    let gateways: Vec<GatewaySummary> = if state.test_mode {
+        flora_db::queries::all_gateways(&state.pool).await?
+    } else {
+        flora_db::queries::gateways_for_account(&state.pool, claims.sub).await?
+    }
+    .into_iter()
+    .map(GatewaySummary::from)
+    .collect();
 
     Ok(Json(AccountResponse {
         account_id: account.0,
@@ -56,12 +61,12 @@ pub async fn gateways(
     headers: axum::http::HeaderMap,
 ) -> Result<Json<Vec<GatewaySummary>>, ApiError> {
     let claims = authenticate(&state, &headers)?;
-    let gateways = flora_db::queries::gateways_for_account(&state.pool, claims.sub)
-        .await?
-        .into_iter()
-        .map(GatewaySummary::from)
-        .collect();
-    Ok(Json(gateways))
+    let rows = if state.test_mode {
+        flora_db::queries::all_gateways(&state.pool).await?
+    } else {
+        flora_db::queries::gateways_for_account(&state.pool, claims.sub).await?
+    };
+    Ok(Json(rows.into_iter().map(GatewaySummary::from).collect()))
 }
 
 /// `POST /account/app-devices/:id/revoke`
