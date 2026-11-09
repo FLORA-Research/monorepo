@@ -31,8 +31,8 @@ dependencies:
   fl_chart: ^1.2.0
   # Locale-aware date formatting for history rows.
   intl: ^0.20.2
-  mobile_scanner: ^7.4.2
-  cached_network_image: ^3.4.1
+  mobile_scanner: ^7.5.0
+  cached_network_image: ^4.0.6
   # Renders an invite as a scannable code.
   qr_flutter: ^4.1.0
 
