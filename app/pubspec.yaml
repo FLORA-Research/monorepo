@@ -27,12 +27,12 @@ dependencies:
   web_socket_channel: ^3.0.3
 
   # UI.
-  flutter_riverpod: ^3.4.3
-  fl_chart: ^1.2.0
+  flutter_riverpod: ^3.5.0
+  fl_chart: ^1.3.1
   # Locale-aware date formatting for history rows.
   intl: ^0.20.2
-  mobile_scanner: ^7.4.2
-  cached_network_image: ^3.4.1
+  mobile_scanner: ^7.5.0
+  cached_network_image: ^4.0.7
   # Renders an invite as a scannable code.
   qr_flutter: ^4.1.0
 
