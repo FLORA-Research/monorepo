@@ -16,7 +16,7 @@ anyhow.workspace = true
 clap = { version = "4", features = ["derive"] }
 flora-protocol = { workspace = true, features = ["wire"] }
 getrandom.workspace = true
-qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
+qrcode = { version = "0.15.0", default-features = false, features = ["svg"] }
 serde.workspace = true
 serde_json.workspace = true
 serialport = { version = "4", default-features = false }
