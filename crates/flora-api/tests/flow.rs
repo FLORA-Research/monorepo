@@ -559,6 +559,11 @@ async fn read_surface_and_reports_return_ingested_data() {
         "gw_id": device_id,
         "ts": now,
         "nodes": [
+            // The bridge can batch the boot banner before the first sensor
+            // sample. They share a server-assigned timestamp but are distinct
+            // sequence numbers and both must survive storage.
+            {"uuid":"0202020202020202","addr":2,"moist":65535,"temp":-32768,"hum":65535,
+             "valve":0,"seq":0,"fw_ver":256},
             {"uuid":"0202020202020202","addr":2,"moist":312,"temp":284,"hum":710,
              "valve":0,"seq":1042,"fw_ver":256},
             {"uuid":"0303030303030303","addr":3,"moist":65535,"temp":-32768,"hum":65535,
@@ -574,6 +579,17 @@ async fn read_surface_and_reports_return_ingested_data() {
         .unwrap();
     let response = router(state.clone()).oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let ingest_response: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 1 << 20)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(ingest_response["accepted"], 3);
+    assert_eq!(
+        ingest_response["stored"], 3,
+        "same-node samples at the same batch timestamp must not conflict"
+    );
 
     // ---- Nodes are discovered from the batch, not told to us separately ----
     let (status, nodes) = call(
@@ -611,8 +627,12 @@ async fn read_surface_and_reports_return_ingested_data() {
         .iter()
         .find(|row| row["node_uuid"].as_str().unwrap() == "0202020202020202")
         .unwrap();
-    assert_eq!(readable["moisture"], 31.2);
+    assert_eq!(
+        readable["moisture"], 31.2,
+        "a seq-0 null banner must not hide the later real sample in the same batch"
+    );
     assert_eq!(readable["temperature"], 28.4);
+    assert_eq!(readable["seq"], 1042);
     let unavailable = latest
         .iter()
         .find(|row| row["node_uuid"].as_str().unwrap() == "0303030303030303")
@@ -633,7 +653,17 @@ async fn read_surface_and_reports_return_ingested_data() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{history}");
-    assert_eq!(history.as_array().unwrap().len(), 1);
+    let history = history.as_array().unwrap();
+    assert_eq!(
+        history.len(),
+        2,
+        "both same-node records from one batch must be retained"
+    );
+    assert_eq!(
+        history[0]["seq"], 1042,
+        "ties sort by newest sequence first"
+    );
+    assert_eq!(history[1]["seq"], 0);
 
     // An unknown metric is refused rather than silently returning everything.
     let (status, _) = call(

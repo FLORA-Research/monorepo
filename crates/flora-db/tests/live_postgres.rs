@@ -231,7 +231,7 @@ async fn readings_reject_invalid_valve_states_and_duplicate_rows() {
     let duplicate = sqlx::query(
         "INSERT INTO readings (ts, gateway_id, node_uuid, humidity)
          VALUES ($1, $2, $3, 71.0)
-         ON CONFLICT (ts, gateway_id, node_uuid) DO NOTHING",
+         ON CONFLICT DO NOTHING",
     )
     .bind(ts)
     .bind(&gateway_id)
@@ -240,4 +240,59 @@ async fn readings_reject_invalid_valve_states_and_duplicate_rows() {
     .await
     .expect("idempotent insert");
     assert_eq!(duplicate.rows_affected(), 0, "retries must not duplicate");
+
+    // A real node sample and its seq-0 boot banner can share the server's
+    // batch timestamp. Distinct sequence numbers must both remain writable.
+    let seq_zero = sqlx::query(
+        "INSERT INTO readings (ts, gateway_id, node_uuid, seq)
+         VALUES ($1, $2, $3, 0)
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(ts)
+    .bind(&gateway_id)
+    .bind(vec![3u8; 8])
+    .execute(&pool)
+    .await
+    .expect("boot banner");
+    let seq_one = sqlx::query(
+        "INSERT INTO readings (ts, gateway_id, node_uuid, moisture, seq)
+         VALUES ($1, $2, $3, 31.2, 1)
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(ts)
+    .bind(&gateway_id)
+    .bind(vec![3u8; 8])
+    .execute(&pool)
+    .await
+    .expect("first sequence");
+    let seq_two = sqlx::query(
+        "INSERT INTO readings (ts, gateway_id, node_uuid, moisture, seq)
+         VALUES ($1, $2, $3, 42.0, 2)
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(ts)
+    .bind(&gateway_id)
+    .bind(vec![3u8; 8])
+    .execute(&pool)
+    .await
+    .expect("next sequence at same timestamp");
+    let seq_one_retry = sqlx::query(
+        "INSERT INTO readings (ts, gateway_id, node_uuid, moisture, seq)
+         VALUES ($1, $2, $3, 31.2, 1)
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(ts)
+    .bind(&gateway_id)
+    .bind(vec![3u8; 8])
+    .execute(&pool)
+    .await
+    .expect("duplicate sequence");
+    assert_eq!(seq_zero.rows_affected(), 1);
+    assert_eq!(seq_one.rows_affected(), 1);
+    assert_eq!(seq_two.rows_affected(), 1);
+    assert_eq!(
+        seq_one_retry.rows_affected(),
+        0,
+        "sequence retries are idempotent"
+    );
 }

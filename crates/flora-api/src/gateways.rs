@@ -146,7 +146,7 @@ pub async fn latest(
                 ts, node_uuid, moisture, temperature, humidity, valve_state, seq
          FROM readings
          WHERE gateway_id = $1
-         ORDER BY node_uuid, ts DESC",
+         ORDER BY node_uuid, ts DESC, seq DESC NULLS LAST",
     )
     .bind(&gateway_id)
     .fetch_all(&state.pool)
@@ -222,7 +222,7 @@ pub async fn history(
          WHERE gateway_id = $1
            AND ts >= $2 AND ts <= $3
            AND ($4::bytea IS NULL OR node_uuid = $4)
-         ORDER BY ts DESC
+         ORDER BY ts DESC, seq DESC NULLS LAST
          LIMIT $5",
     )
     .bind(&gateway_id)

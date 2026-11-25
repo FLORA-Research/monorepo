@@ -83,10 +83,9 @@ pub fn accept_batch(device_id: &str, bytes: &[u8], now: i64) -> Result<Incoming,
 /// Persist a batch, ignoring duplicates.
 ///
 /// A device retries after a timeout or a dropped response, so the same
-/// batch can legitimately arrive more than once. The primary key is
-/// `(ts, gateway_id, node_uuid)` and the insert ignores conflicts, which
-/// makes ingest idempotent rather than duplicating a reading on every
-/// retry.
+/// batch can legitimately arrive more than once. The sequence-aware unique
+/// index makes `(ts, gateway_id, node_uuid, seq)` idempotent while allowing
+/// several samples for one node in a single batch/timestamp.
 pub async fn store(pool: &PgPool, incoming: &Incoming) -> Result<u64, IngestError> {
     // Record the nodes this batch proves exist, with the address each
     // answered at. This is the discovery map: the cloud is never told
@@ -117,7 +116,7 @@ pub async fn store(pool: &PgPool, incoming: &Incoming) -> Result<u64, IngestErro
             "INSERT INTO readings (ts, gateway_id, node_uuid, moisture, temperature,
                                    humidity, valve_state, seq)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             ON CONFLICT (ts, gateway_id, node_uuid) DO NOTHING",
+             ON CONFLICT DO NOTHING",
         )
         .bind(reading.ts)
         .bind(&reading.gateway_id)
